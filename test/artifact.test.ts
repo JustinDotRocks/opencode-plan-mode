@@ -8,9 +8,12 @@ import {
   deriveTodos,
   ensurePlanFile,
   formatChecklist,
+  identityHash,
   mergePlan,
   parsePlan,
+  remainingSteps,
   renderPlan,
+  setStepDone,
   writePlanFile,
 } from "../src/artifact.ts"
 
@@ -66,6 +69,23 @@ test("renderPlan round-trips structured fields", () => {
     { text: "Add tests", done: true },
   ])
   assert.match(rendered, /Source of truth for this session/)
+})
+
+test("identityHash ignores checklist progress but not step text", () => {
+  const base = {
+    title: "Ship search",
+    goal: "Add search.",
+    research: "Index exists.",
+    notes: "No UI yet.",
+  }
+  const open = parsePlan(renderPlan({ ...base, steps: [{ text: "Wire API", done: false }] }))
+  const done = parsePlan(renderPlan({ ...base, steps: [{ text: "Wire API", done: true }] }))
+  const other = parsePlan(renderPlan({ ...base, steps: [{ text: "Different", done: false }] }))
+  assert.equal(identityHash(open), identityHash(done))
+  assert.notEqual(identityHash(open), identityHash(other))
+  assert.deepEqual(remainingSteps(done), [])
+  assert.deepEqual(setStepDone(open.steps, 1, true), [{ text: "Wire API", done: true }])
+  assert.equal(setStepDone(open.steps, 2, true), undefined)
 })
 
 test("deriveTodos and mergePlan keep user edits unless patched", () => {

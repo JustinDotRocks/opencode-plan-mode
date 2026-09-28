@@ -8,8 +8,9 @@ import {
   writePlanFile,
   type PlanStep,
 } from "./artifact.ts"
+import { applyApprovedProgress } from "./execute.ts"
 import { planArtifactPath } from "./permissions.ts"
-import { isPlanning, loadState, saveState } from "./state.ts"
+import { isApproved, isPlanning, loadState, saveState } from "./state.ts"
 
 type Ctx = Plugin.Context
 
@@ -108,6 +109,12 @@ export async function registerPlanTools(ctx: Ctx): Promise<void> {
       },
       execute: async (input, context) => {
         const state = await loadState(ctx.storage, context.sessionID)
+        if (isApproved(state)) {
+          return {
+            content:
+              "The plan is approved. Use plan_progress to mark checklist steps. To change Goal, Research, step text, or Notes, /plan-reject first (or ask the user before a large deviation).",
+          }
+        }
         if (!isPlanning(state)) {
           return {
             content:
@@ -138,6 +145,42 @@ export async function registerPlanTools(ctx: Ctx): Promise<void> {
             markdown.trimEnd(),
           ].join("\n"),
         }
+      },
+    })
+
+    editor.add({
+      name: "progress",
+      description:
+        "Mark an approved plan step done or not done. Does not change step text. Stay on-plan; ask the user before large deviations.",
+      options: { namespace: "plan" },
+      input: {
+        type: "object",
+        properties: {
+          index: {
+            type: "integer",
+            description: "1-based index in the Steps checklist",
+            minimum: 1,
+          },
+          done: {
+            type: "boolean",
+            description: "true to complete (default), false to reopen",
+          },
+        },
+        required: ["index"],
+        additionalProperties: false,
+      },
+      execute: async (input, context) => {
+        const state = await loadState(ctx.storage, context.sessionID)
+        const path = state?.planPath ?? (await planPathFor(ctx, context.sessionID))
+        const doc = await readPlanFile(path)
+        const record = (input ?? {}) as { index?: unknown; done?: unknown }
+        const index = typeof record.index === "number" ? record.index : Number.NaN
+        const done = record.done !== false
+        const result = applyApprovedProgress({ state, doc, index, done })
+        if (!result.ok) return { content: result.content }
+        await writePlanFile(path, result.markdown)
+        await rememberHash(ctx, context.sessionID, result.markdown)
+        return { content: result.content }
       },
     })
   })

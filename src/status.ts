@@ -1,5 +1,5 @@
 import type { PlanDocument } from "./artifact.ts"
-import { formatChecklist } from "./artifact.ts"
+import { formatChecklist, remainingSteps } from "./artifact.ts"
 
 export const PLAN_TITLE_PREFIX = "[PLAN] "
 
@@ -45,6 +45,7 @@ export function enterStatus(input: { planPath: string; resumed: boolean; created
     "- Open that file in your editor to change sections/steps, or use plan_write.",
     "- /plan-show displays the current file + checklist. OpenCode has no plan sidebar.",
     "- Approve: /plan-approve (unlocks implementation; agent follows this file).",
+    "- Execute after approve: /plan-execute (hard-refuses if plan content drifted).",
     "- Reject/revise: /plan-reject (or /plan-revise). Stays in Plan mode; extra args are feedback.",
     "- Exit without approving: /plan-exit (keeps the draft) or /plan-exit discard.",
   ].join("\n")
@@ -87,7 +88,7 @@ export function approveStatus(input: { planPath: string; hash: string }): string
     "Plan APPROVED. Implementation tools are unlocked.",
     `Artifact (source of truth): ${input.planPath}`,
     `Approved SHA-256: ${input.hash}`,
-    "The agent must follow this file. /plan-reject returns to Plan mode without keeping the unlock.",
+    "The agent must follow this file. /plan-execute continues it. /plan-reject returns to Plan mode without keeping the unlock.",
   ].join("\n")
 }
 
@@ -134,8 +135,10 @@ export function researchInstructions(planPath: string): string {
 export function approvedInstructions(planPath: string): string {
   return [
     "The user approved the plan. Implementation tools are unlocked.",
-    `Follow the approved plan artifact at ${planPath}. Do not expand scope.`,
-    "If the file on disk no longer matches the approved SHA-256, stop and ask for /plan-approve or /plan-reject.",
+    `Follow the approved plan artifact at ${planPath} as the source of truth.`,
+    "Step through the Steps checklist in order. After finishing a step, call plan_progress with its 1-based index.",
+    "Stay on-plan. Ask the user before large deviations (new scope, skipped steps, or a different approach).",
+    "Do not expand scope. Checkbox progress is allowed; if Goal, Research, step text, or Notes changed, stop and ask for /plan-approve or /plan-reject.",
     "Do not treat chat-only notes as a replacement for the file.",
   ].join(" ")
 }
@@ -151,15 +154,77 @@ export function approvedImplementPrompt(input: {
     : []
   return [
     "The user approved this plan. Implement ONLY this approved plan. Do not expand scope.",
+    "Stay on-plan. Work the Steps checklist in order.",
+    "After finishing each step, call plan_progress with its 1-based index.",
+    "Ask the user before large deviations (new scope, skipped steps, or a different approach).",
     `Path: ${input.planPath}`,
-    `Approved SHA-256: ${input.hash}`,
+    `Approved identity SHA-256: ${input.hash}`,
     formatChecklist(input.doc),
+    remainingStepsBlock(input.doc),
     "",
     "----- approved plan -----",
     input.doc.markdown.trimEnd(),
     "----- end approved plan -----",
     ...notes,
   ].join("\n")
+}
+
+export function remainingStepsBlock(doc: PlanDocument): string {
+  const open = remainingSteps(doc)
+  if (doc.steps.length === 0) {
+    return "No steps in the plan. Ask the user what to implement, or /plan-reject to add steps."
+  }
+  if (open.length === 0) {
+    return "All checklist steps are done. Confirm with the user; do not expand scope."
+  }
+  return [`Next incomplete steps (${open.length} remaining):`, ...open.map((step) => `- [ ] ${step.text}`)].join("\n")
+}
+
+export function executeNotApprovedStatus(): string {
+  return "No approved plan to execute. Use /plan, then /plan-approve. /plan-execute runs only after approve."
+}
+
+export function executeDriftStatus(input: { planPath: string; approvedHash: string; currentHash: string }): string {
+  return [
+    "EXECUTE REFUSED. The approved plan content changed after /plan-approve.",
+    `Artifact: ${input.planPath}`,
+    `Approved identity SHA-256: ${input.approvedHash}`,
+    `Current identity SHA-256: ${input.currentHash}`,
+    "Checkbox progress is allowed. Goal, Research, step text, and Notes are not.",
+    "Use /plan-approve again (new snapshot) or /plan-reject to revise. Do not implement.",
+  ].join("\n")
+}
+
+export function executeStatus(input: { planPath: string; remaining: number; total: number }): string {
+  return [
+    "Executing the approved plan (source of truth).",
+    `Artifact: ${input.planPath}`,
+    `Checklist: ${input.total - input.remaining}/${input.total} done.`,
+    "Step through remaining items. Mark progress with plan_progress. Ask before large deviations.",
+  ].join("\n")
+}
+
+export function driftDenyMessage(planPath: string): string {
+  return `Approved plan content changed at ${planPath}. Implementation is blocked until /plan-approve or /plan-reject. Checkbox-only progress is allowed; Goal/Research/step text/Notes changes are not.`
+}
+
+export function progressDeniedStatus(): string {
+  return "plan_progress is only for an approved plan. Use /plan then /plan-approve, or plan_write while still planning."
+}
+
+export function progressMessage(input: { index: number; done: boolean; text: string; doc: PlanDocument }): string {
+  const mark = input.done ? "done" : "reopened"
+  const remaining = remainingSteps(input.doc).length
+  const lines = [
+    `Marked step ${input.index} ${mark}: ${input.text}`,
+    formatChecklist(input.doc),
+  ]
+  if (remaining === 0 && input.doc.steps.length > 0) {
+    lines.push("All checklist steps are done. Confirm with the user; do not expand scope.")
+  } else {
+    lines.push("Stay on-plan. Ask before large deviations.")
+  }
+  return lines.join("\n")
 }
 
 export function revisePrompt(input: { planPath: string; feedback: string }): string {

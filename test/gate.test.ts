@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
-import { contentHash, parsePlan, renderPlan, sourceOfTruthBlock } from "../src/artifact.ts"
+import { contentHash, identityHash, parsePlan, renderPlan, sourceOfTruthBlock } from "../src/artifact.ts"
 import { approvedContextNote, gateIdleReason, hashesMatch } from "../src/gate.ts"
 import {
   parseSessionState,
@@ -68,13 +68,30 @@ test("gateIdleReason blocks idle and missing state", () => {
   assert.equal(gateIdleReason(planningState({ phase: "approved", approvedHash: "x" })), undefined)
 })
 
-test("hashesMatch compares SHA-256 of the current file to approvedHash", () => {
+test("hashesMatch compares identity SHA-256 and ignores checkbox progress", () => {
   const markdown = sampleMarkdown()
-  const hash = contentHash(markdown)
+  const hash = identityHash(parsePlan(markdown))
   assert.equal(hash.length, 64)
   assert.equal(hashesMatch(hash, markdown), true)
+  const progressed = renderPlan({
+    title: "Ship search",
+    goal: "Add search.",
+    research: "Index exists.",
+    steps: [{ text: "Wire API", done: true }],
+    notes: "No UI yet.",
+  })
+  assert.equal(hashesMatch(hash, progressed), true)
+  const drifted = renderPlan({
+    title: "Ship search",
+    goal: "Add search.",
+    research: "Index exists.",
+    steps: [{ text: "Something else", done: false }],
+    notes: "No UI yet.",
+  })
+  assert.equal(hashesMatch(hash, drifted), false)
   assert.equal(hashesMatch("deadbeef", markdown), false)
   assert.equal(hashesMatch(undefined, markdown), false)
+  assert.equal(contentHash(markdown).length, 64)
 })
 
 test("approve and reject status copy describe the gate", () => {
@@ -121,14 +138,24 @@ test("sourceOfTruthBlock distinguishes draft vs approved", () => {
   assert.match(approved, /This snapshot was approved/)
 })
 
-test("approvedContextNote warns when the file hash diverges", () => {
+test("approvedContextNote warns when plan content drifts, not checkbox progress", () => {
   const markdown = sampleMarkdown()
   const doc = parsePlan(markdown)
-  const hash = contentHash(markdown)
+  const hash = identityHash(doc)
   const ok = approvedContextNote("/tmp/plan.md", doc, hash)
   assert.match(ok, /approved/)
-  assert.doesNotMatch(ok, /has changed/)
+  assert.doesNotMatch(ok, /content changed/)
+  const progressed = parsePlan(
+    renderPlan({
+      title: "Ship search",
+      goal: "Add search.",
+      research: "Index exists.",
+      steps: [{ text: "Wire API", done: true }],
+      notes: "No UI yet.",
+    }),
+  )
+  assert.doesNotMatch(approvedContextNote("/tmp/plan.md", progressed, hash), /content changed/)
   const stale = approvedContextNote("/tmp/plan.md", doc, "not-the-hash")
-  assert.match(stale, /has changed/)
+  assert.match(stale, /content changed/)
   assert.match(stale, /\/plan-approve/)
 })

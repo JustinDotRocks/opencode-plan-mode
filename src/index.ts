@@ -1,6 +1,7 @@
 import { pathToFileURL } from "node:url"
 import { Plugin } from "@opencode/plugin"
 import { contentHash, readPlanFile, sourceOfTruthBlock } from "./artifact.ts"
+import { approvedWorkBlocked, executePlan } from "./execute.ts"
 import { approvePlan, approvedContextNote, rejectPlan } from "./gate.ts"
 import { enterPlanMode, exitPlanMode, showPlanArtifact, togglePlanMode } from "./plan-mode.ts"
 import { registerPlanTools } from "./plan-tools.ts"
@@ -66,6 +67,15 @@ export default Plugin.define({
         description: "Approve the plan artifact, unlock implementation tools, and follow that file",
         execute: async ({ sessionID, prompt }) => {
           await approvePlan(ctx, sessionID, prompt.text)
+        },
+      })
+
+      editor.add({
+        name: "plan-execute",
+        description:
+          "Execute the approved plan (source of truth). Refuses if Goal/Research/step text/Notes drifted.",
+        execute: async ({ sessionID, prompt }) => {
+          await executePlan(ctx, sessionID, prompt.text)
         },
       })
 
@@ -141,30 +151,53 @@ export default Plugin.define({
 
     await ctx.permission.hook("evaluate", async (event) => {
       const state = await loadState(ctx.storage, event.sessionID)
-      if (!isPlanning(state)) return
+      if (isPlanning(state)) {
+        if (event.action === "shell" || event.action === "execute") {
+          event.effect = "deny"
+          event.message =
+            "Plan mode is ON (research only). Shell and Code Mode are blocked until /plan-approve."
+          return
+        }
 
-      if (event.action === "shell" || event.action === "execute") {
-        event.effect = "deny"
-        event.message =
-          "Plan mode is ON (research only). Shell and Code Mode are blocked until /plan-approve."
+        if (event.action === "edit" && shouldDenyPlanningEdit(event.resources, event.sessionID)) {
+          event.effect = "deny"
+          event.message = `Plan mode is ON (research only). Project edits are blocked until /plan-approve. Write the plan at ${state.planPath}.`
+        }
         return
       }
 
-      if (event.action === "edit" && shouldDenyPlanningEdit(event.resources, event.sessionID)) {
-        event.effect = "deny"
-        event.message = `Plan mode is ON (research only). Project edits are blocked until /plan-approve. Write the plan at ${state.planPath}.`
+      if (isApproved(state) && state) {
+        const blocked = await approvedWorkBlocked(state)
+        if (!blocked.blocked) return
+        if (event.action === "shell" || event.action === "execute") {
+          event.effect = "deny"
+          event.message = blocked.message
+          return
+        }
+        if (event.action === "edit" && shouldDenyPlanningEdit(event.resources, event.sessionID)) {
+          event.effect = "deny"
+          event.message = blocked.message
+        }
       }
     })
 
     await ctx.tool.hook("execute.before", async (event) => {
       if (!MUTATING_FILE_TOOLS.has(event.tool)) return
       const state = await loadState(ctx.storage, event.sessionID)
-      if (!isPlanning(state)) return
       const paths = toolInputPaths(event.input)
-      if (shouldDenyPlanningEdit(paths, event.sessionID)) {
-        throw new Error(
-          `Plan mode is ON (research only). Cannot ${event.tool} project files until /plan-approve. Write the plan at ${state.planPath}.`,
-        )
+      if (isPlanning(state) && state) {
+        if (shouldDenyPlanningEdit(paths, event.sessionID)) {
+          throw new Error(
+            `Plan mode is ON (research only). Cannot ${event.tool} project files until /plan-approve. Write the plan at ${state.planPath}.`,
+          )
+        }
+        return
+      }
+      if (isApproved(state) && state) {
+        const blocked = await approvedWorkBlocked(state)
+        if (blocked.blocked && shouldDenyPlanningEdit(paths, event.sessionID)) {
+          throw new Error(blocked.message ?? `Cannot ${event.tool} until /plan-approve or /plan-reject.`)
+        }
       }
     })
   },
