@@ -1,0 +1,241 @@
+# OpenCode 2 plan-mode plugin research
+
+Target: **OpenCode 2.0.18**. Research + design only — this file is not an implementation.
+
+Official docs:
+
+- [Build plugins](https://opencode.ai/v2/docs/build/plugins/) (Promise API, hooks, transforms)
+- [Effect plugins](https://opencode.ai/v2/docs/build/plugins/effect)
+- [CLI / TUI plugins](https://opencode.ai/v2/docs/build/plugins/cli)
+- [Configure plugins](https://opencode.ai/v2/docs/plugins/)
+- [Config `plugins` field](https://opencode.ai/v2/docs/config/)
+- [Migrate V1 → V2](https://opencode.ai/v2/docs/build/plugins/migrate-v1)
+- [Agents](https://opencode.ai/v2/docs/agents/)
+- [Permissions](https://opencode.ai/v2/docs/permissions/)
+- [Commands](https://opencode.ai/v2/docs/commands/)
+- [Tools](https://opencode.ai/v2/docs/tools/)
+
+---
+
+## 1. Plugin basics
+
+### Default export
+
+V2 loads a **default export** from `Plugin.define`. It must have a stable **`id`** and either **`setup`** (Promise) or **`effect`** (Effect). That is the whole loader contract.
+
+```ts
+// Promise — @opencode/plugin
+import { Plugin } from "@opencode/plugin"
+
+export default Plugin.define({
+  id: "plan-mode",
+  async setup(ctx) {
+    console.log(`loaded in OpenCode ${ctx.app.version}`)
+    return () => console.log("unloaded")
+  },
+})
+```
+
+```ts
+// Effect — @opencode/plugin/effect
+import { Plugin } from "@opencode/plugin/effect"
+import { Effect } from "effect"
+
+export default Plugin.define({
+  id: "plan-mode",
+  effect: (ctx) =>
+    Effect.gen(function* () {
+      yield* ctx.storage.set("loaded", true)
+    }),
+})
+```
+
+- `id` scopes `ctx.storage` and shows up in plugin status/diagnostics.
+- `setup` may return a cleanup function. Hook/transform registrations dispose automatically on unload.
+- Effect plugins live in a `Scope`; fibers/finalizers end when the plugin unloads.
+- `ctx.options` is the object from `plugins[].options`.
+- `ctx.location` is **this plugin instance’s** directory/project, not every session it might see.
+
+V1 plugins (a function that returns a hook object) **do not run** in V2. Port to `Plugin.define` + domain `hook`/`transform`. See [migrate](https://opencode.ai/v2/docs/build/plugins/migrate-v1). Config key is `plugins` (not V1 `plugin`).
+
+### Package layout (published)
+
+```text
+opencode-plan-mode/
+  package.json
+  src/index.ts          # default export Plugin.define
+  # optional later:
+  src/tui.tsx           # only if we add a TUI panel
+```
+
+```json
+{
+  "name": "opencode-plan-mode",
+  "version": "0.0.1",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@opencode/plugin": "latest"
+  }
+}
+```
+
+Pin `@opencode/plugin` to a version compatible with **2.0.18**. Optional `./tui` export is only for [CLI plugins](https://opencode.ai/v2/docs/build/plugins/cli). Server plan-mode does not need it for the first scaffold.
+
+### `opencode.json` entry
+
+```jsonc
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugins": [
+    "opencode-plan-mode",
+    "opencode-plan-mode@0.0.1",
+    "./",
+    {
+      "package": "opencode-plan-mode",
+      "options": { "artifactDir": ".opencode/plans" }
+    }
+  ]
+}
+```
+
+Relative paths resolve from the config file that contains the entry. Plugin arrays **merge** across global → project → `.opencode` configs (lowest to highest precedence), they do not replace each other. Prefix `-id` or `-wildcard` to disable; `*` matches all.
+
+### Load lifecycle
+
+1. Server starts; cached package plugins load immediately; missing packages install in the background ([configure](https://opencode.ai/v2/docs/plugins/)).
+2. Auto-discovery: every `.opencode/plugins/` (and `~/.config/opencode/plugins/`) loads `.ts` / `.js` files and immediate package directories.
+3. A `plugins/` directory **beside** a project-root `opencode.json` is **not** auto-discovered — list it explicitly or put it under `.opencode/plugins/`.
+4. `setup` / `effect` runs. Transforms register replayable editors; hooks intercept live ops.
+5. Config/plugin file changes under watched dirs reload. `opencode service restart` if a local dep is unwatched.
+6. Unload runs `setup` cleanup and disposes registrations.
+
+### Local vs published install
+
+| Path | How |
+| --- | --- |
+| Dev in this repo | `"plugins": ["./"]` in a consumer `opencode.json`, or symlink/copy `src` into `.opencode/plugins/plan-mode/` |
+| Local path | `"./plugins/plan-mode"`, `"../shared/plugin"`, absolute path, or `file:///...` |
+| Global package | `opencode plugin add opencode-plan-mode` (also Git: `github:org/repo`) |
+| Project package | `plugins: ["opencode-plan-mode"]` in project `opencode.json(c)` |
+| Check | `opencode plugin list` — id `plan-mode` should be active |
+
+CLI-only plugins go in `~/.config/opencode/cli.json`, not `opencode.json`. Plan-mode gating must be a **server** plugin.
+
+---
+
+## 2. Extension points we need
+
+There is **no first-class “mode” type** in the plugin API. OpenCode “modes” are **agents** (`primary` | `subagent` | `all`) plus session state. Enter/exit is `switchAgent` and/or session permission rules.
+
+`AgentEditor` can `list` / `get` / `default` / `update` / `remove` — **not `add`**. A plugin cannot register a new agent from `ctx.agent.transform`. Use the built-in `plan` / `build` agents, and/or ship Markdown agents in the **host project** (`.opencode/agents/*.md`).
+
+| Domain | What we use it for |
+| --- | --- |
+| **Commands** | `/plan`, `/plan-approve`, `/plan-reject`, `/plan-exit`. `ctx.command.transform` is **add-only**. `execute` gets `{ sessionID, prompt, delivery }` and typically calls `ctx.session.prompt` or `switchAgent`. Markdown commands can set `agent: plan` ([commands](https://opencode.ai/v2/docs/commands/)). No global `command.execute.before`. |
+| **Tools** | Optional `submit_plan` / `get_plan`. `ctx.tool.transform` (`add`/`update`/`remove`). `execute.before` / `execute.after` hooks. |
+| **Session hooks** | `context`: inject plan instructions, `delete event.tools.write` (and edit/patch) while planning. `prompt`: rewrite admitted user text (not a reject API). Register `compaction`/`generate` separately if those flows must stay consistent. |
+| **Agents** | `ctx.session.switchAgent({ sessionID, agent: "plan" \| "build" })`. `ctx.agent.transform` to tweak the built-in `plan` agent (description/permissions) if `Agent.Info` exposes those fields — do not invent a parallel agent unless the consumer adds a Markdown agent file. |
+| **Permissions** | Action `edit` covers `edit`/`write`/`patch` (resource = path). **2.0.18:** `ctx.session.update({ sessionID, permissions })` (not `ctx.permission.rules`, which is absent from the plugin types). Evaluated **after** agent rules; last match wins; children inherit at create. `ctx.permission.hook("evaluate")` can change `allow`/`ask` → `deny`; a configured **`deny` is final** and skips the hook. Built-in `question` tool for an approve UI. |
+| **Storage** | `ctx.storage` JSON, keyed by plugin `id`. Per-session: `{ phase, planPath, approvedHash, sessionID }`. |
+
+Also useful: `ctx.session.synthetic` (status messages), `ctx.session.interrupt`, `ctx.event.subscribe` (idle/permission events). TUI panel (`session.panel` slot) is a **separate** `@opencode/plugin/tui` plugin — Cursor-like plan sidebar is not available from the server plugin alone.
+
+---
+
+## 3. Plan Mode behavior (Cursor-like, as far as the API allows)
+
+Aspire to: enter plan → research without editing the project → produce an editable plan → user edits → explicit approve → execute **only** that plan → exit.
+
+| Cursor-like step | OpenCode 2 mapping | Gap |
+| --- | --- | --- |
+| **Enter plan mode** | Command `/plan` → `switchAgent(..., "plan")` + `session.update` permissions deny `edit` except the artifact path; store `phase: "planning"` | No dedicated mode toggle in the server API. Closest UI is the agent switcher (`plan` is already a built-in primary agent). |
+| **Research-only** | Built-in `plan` already: allow questions; **deny edits except `~/.opencode/plan`**. Keep `read` / `glob` / `grep` / `webfetch` / `websearch`. Optionally `delete event.tools.write` in `context`. Optionally deny or `ask` `shell` (built-in `plan` does **not** deny shell). | Shell can still mutate files unless we add `shell` deny/`ask` + `execute.before` on `write`/`edit`/`patch`. Hiding tools is not enforcement. |
+| **Editable plan artifact** | Markdown file the user opens in their editor. Align with the built-in allowlist: `~/.opencode/plan/<sessionID>.md`, **or** a workspace path (e.g. `.opencode/plans/PLAN.md`) plus a session rule `edit` allow on that path only. Plugin tools can write/update the file; user edits it as normal text. Persist path + content hash in `ctx.storage`. | No in-app plan editor unless we add a TUI plugin later. Workspace files are more visible; `~/.opencode/plan` needs no extra allow rule. |
+| **Approve / reject gate** | `/plan-approve` and `/plan-reject`, and/or the built-in `question` tool. Approve: read artifact, store `approvedHash` + `phase: "approved"`. Reject: stay in planning or clear artifact; do not lift `edit` deny. | Not a dedicated “Build” button. Commands + `question` are the supported gates. |
+| **Execute only against approved plan** | `/plan-execute` (or approve does this): verify file hash still matches `approvedHash`; if the user edited after approve, refuse and ask to re-approve. `switchAgent(..., "build")` and replace session rules with allow (or empty). Prompt: “Implement **only** this approved plan:” + file contents. | Cannot cryptographically bind the agent to the file; hash check + prompt is the API-level guarantee. Re-apply deny if they `/plan` again. |
+| **Exit** | `/plan-exit` → `switchAgent` to `build` (or previous agent), clear session deny rules, `phase: "idle"`. | Session stores selected agent; switching is the exit. |
+
+Built-in `plan` agent ([agents](https://opencode.ai/v2/docs/agents/), [permissions defaults](https://opencode.ai/v2/docs/permissions/#defaults)): primary; explores and plans without editing normal project files; may write OpenCode plan files when asked. A `/plan` **markdown** command with `agent: plan` already switches the session then submits. This plugin should **compose** that, not fight it: add the approve/hash/execute protocol and tighter session rules (especially `shell` if we want closer Cursor parity).
+
+---
+
+## 4. Recommended architecture
+
+**Promise plugin**, not Effect: one extra runtime (`effect`) is unnecessary for commands + hooks + storage. Keep Effect as a later option if the rest of the stack is Effect-native.
+
+**Do not invent a custom agent** in the plugin (cannot `editor.add` an agent). Use:
+
+1. Built-in **`plan`** for research-only.
+2. Built-in **`build`** for execute.
+3. **Commands** as the user-facing enter / approve / reject / execute / exit API (works in TUI, desktop, and `opencode run`).
+4. **Session `update({ permissions })`** as the hard gate (deny `edit` except artifact; deny `shell` and `execute` while planning).
+5. **`ctx.storage`** for phase + approved hash (durable, plugin-scoped).
+6. **`execute.before`** as defense in depth: if `phase !== "executing"` and tool is `write`/`edit`/`patch` and path is not the artifact, throw.
+7. **`session.hook("context")`** to attach “you are planning; do not edit the project; write the plan to \<path\>”.
+
+**Artifact:** default `~/.opencode/plan/` so it matches shipped `plan` permissions. Plugin option to use a repo-relative path for people who want the plan in git; then session rules must allow that path.
+
+**Approve gate:** command (explicit) + optional `question` prompt when the model thinks the plan is ready. Execute refuses unless hash matches.
+
+**Out of scope for v1 (API limits):** Cursor plan sidebar, drag-to-reorder todos in a native panel, preventing the user from switching agents in the UI. A later TUI plugin could add a `session.panel` named `plan-mode.plan`.
+
+---
+
+## 5. Minimal stub (next card — scaffold only)
+
+Smallest plugin that **loads on 2.0.18**. Do not implement full plan mode yet.
+
+Checklist:
+
+- [ ] `package.json`: `"type": "module"`, `"exports": { ".": "./src/index.ts" }`, dependency `@opencode/plugin` compatible with 2.0.18
+- [ ] `src/index.ts` default-exports `Plugin.define({ id: "plan-mode", async setup(ctx) { ... } })`
+- [ ] In `setup`, `ctx.command.transform` add one command, e.g. `plan-mode` / `plan`, whose `execute` calls `ctx.session.prompt` with a noop/hello line (or `switchAgent` to `plan` and prompt “Plan mode plugin loaded.”)
+- [ ] Optional: `ctx.storage.set("loaded", true)` to prove storage
+- [ ] Consumer `opencode.jsonc`: `"plugins": ["./"]` (this repo) or path to the package
+- [ ] `opencode service restart` → `opencode plugin list` shows `plan-mode` **active** (not failed)
+- [ ] In a session, run `/plan` (or whatever name) and see the prompt land
+
+Install smoke:
+
+```sh
+# from a project that points plugins at this package
+opencode plugin list
+opencode service restart
+```
+
+After the stub loads, the following card can add: session phase in storage, `permission.rules` deny `edit`, artifact path, approve hash, execute prompt.
+
+---
+
+## 6. API limits (cannot gate)
+
+Recorded against OpenCode **2.0.18**. Implement enter/exit around these; do not pretend they are native Cursor controls.
+
+| Limit | Consequence |
+| --- | --- |
+| **No first-class mode type** | Toggle is `/plan`, `/plan-mode`, `/plan-exit` plus `switchAgent("plan" \| previous)`. The agent switcher is not a plugin-owned Plan mode control. |
+| **Cannot register a new agent** | `AgentEditor` has no `add`. Use the built-in `plan` / `build` agents. |
+| **Cannot hide or replace the UI agent switcher** | The user can still pick `build` (or any primary) in the TUI/desktop. That does **not** run `/plan-exit`; session deny rules stay until `/plan-exit`. We cannot intercept that switch to auto-exit or auto-enter. |
+| **No native Plan badge** | Closest UX: synthetic status + `[PLAN] ` session title prefix. No TUI chrome from a server plugin. |
+| **No in-app plan editor / sidebar** | Artifact is a markdown file under `~/.opencode/plan/`. A `session.panel` would need a separate `@opencode/plugin/tui` plugin. |
+| **`ctx.permission.rules` missing** | Use `ctx.session.update({ permissions })`. Empty array clears extras on exit. |
+| **Configured `deny` skips `permission.evaluate`** | The evaluate hook cannot override an existing deny; it can only tighten `allow`/`ask`. |
+| **Hiding tools is not enforcement** | Deleting `event.tools.write` in `context` only hides them from the model. Do not hide write/edit if the agent must write the plan artifact. Enforce with session rules + `evaluate` + `execute.before`. |
+| **`execute.before` has no typed deny** | Promise hook can only mutate `input` (or throw). Throwing is defense in depth, not a documented permission effect. |
+| **Shell is not denied by built-in `plan`** | Plugin adds session `shell` + `execute` deny while `phase === "planning"`. Directory inference on shell is best-effort; MCP tools are not covered. |
+| **Prompt hooks cannot reject** | Cannot block a user prompt that says “just implement it”; we can only inject research-only instructions. |
+| **User filesystem edits** | Permissions apply to the agent, not the user’s editor. |
+| **No cryptographic bind to the plan file** | Approve/execute (later) can hash-check; the model is not bound to the file. |
+| **Cannot prevent Code Mode nested tools except `execute` deny** | Session rule `{ action: "execute", effect: "deny" }` is the documented Code Mode gate. |
+
+### Exit without approve (documented behavior)
+
+| Command | Draft |
+| --- | --- |
+| `/plan-exit` or `/plan-mode` (while on) | **Keep** `~/.opencode/plan/<sessionID>.md`. Phase becomes `idle`. |
+| `/plan-exit discard` or `/plan-mode discard` | **Discard** (unlink the file; clear storage). |
+
+OpenCode cannot present a native “Keep / Discard” modal on agent-switch. Command arguments are the gate.
