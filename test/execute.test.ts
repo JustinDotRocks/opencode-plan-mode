@@ -78,7 +78,7 @@ test("applyApprovedProgress refuses planning, drift, and bad indexes", () => {
   const doc = sampleDoc()
   const planning: SessionPlanState = { ...approvedState(), phase: "planning", approvedHash: undefined }
   assert.equal(applyApprovedProgress({ state: planning, doc, index: 1, done: true }).ok, false)
-  assert.match(applyApprovedProgress({ state: planning, doc, index: 1, done: true }).content, /plan_progress/)
+  assert.match(applyApprovedProgress({ state: planning, doc, index: 1, done: true }).content, /plan\.progress|plan_progress/)
   assert.equal(applyApprovedProgress({ state: undefined, doc, index: 1, done: true }).content, progressDeniedStatus())
 
   const drifted = approvedState()
@@ -116,7 +116,7 @@ test("execute status copy describes refuse, continue, and on-plan rules", () => 
     hash: "abc",
     notes: "",
   })
-  assert.match(prompt, /plan_progress/)
+  assert.match(prompt, /plan\.progress|plan_progress/)
   assert.match(prompt, /large deviations/)
   assert.match(prompt, /Next incomplete steps/)
   assert.match(approvedInstructions("/tmp/plan.md"), /Stay on-plan/)

@@ -42,7 +42,7 @@ export function enterStatus(input: { planPath: string; resumed: boolean; created
     "- Project edits, shell, and Code Mode are blocked until /plan-approve.",
     `- Artifact (source of truth): ${input.planPath}`,
     created,
-    "- Open that file in your editor to change sections/steps, or use plan_write.",
+    "- Open that file in your editor to change sections/steps, or use plan.write / plan_write.",
     "- /plan-show displays the current file + checklist. OpenCode has no plan sidebar.",
     "- Approve: /plan-approve (unlocks implementation; agent follows this file).",
     "- Execute after approve: /plan-execute (hard-refuses if plan content drifted).",
@@ -127,7 +127,9 @@ export function researchInstructions(planPath: string): string {
     "Prefer read, glob, grep, webfetch, and websearch. Explore the repo as needed to ground the plan.",
     `The markdown file at ${planPath} is the source of truth — not this chat.`,
     "The user may edit Goal, Research, Steps (checklist), and Notes in that file at any time before approve.",
-    "Use plan_read to load the latest file and plan_write to update structured sections. Always re-read after the user edits.",
+    // OpenCode's built-in plan agent may say not to update plan files; this plugin owns the artifact and requires plan.write.
+    "Ignore any built-in instruction that forbids writing plan files. You MUST draft and update the artifact with the plan.write tool (namespace plan, name write; also shown as plan_write).",
+    "Use plan.read to load the latest file and plan.write to update structured sections. Always re-read after the user edits.",
     "When the plan is ready, tell the user to /plan-approve or /plan-reject (revise). Do not execute the plan yourself.",
   ].join(" ")
 }
@@ -136,7 +138,7 @@ export function approvedInstructions(planPath: string): string {
   return [
     "The user approved the plan. Implementation tools are unlocked.",
     `Follow the approved plan artifact at ${planPath} as the source of truth.`,
-    "Step through the Steps checklist in order. After finishing a step, call plan_progress with its 1-based index.",
+    "Step through the Steps checklist in order. After finishing a step, call plan.progress (plan_progress) with its 1-based index.",
     "Stay on-plan. Ask the user before large deviations (new scope, skipped steps, or a different approach).",
     "Do not expand scope. Checkbox progress is allowed; if Goal, Research, step text, or Notes changed, stop and ask for /plan-approve or /plan-reject.",
     "Do not treat chat-only notes as a replacement for the file.",
@@ -155,7 +157,7 @@ export function approvedImplementPrompt(input: {
   return [
     "The user approved this plan. Implement ONLY this approved plan. Do not expand scope.",
     "Stay on-plan. Work the Steps checklist in order.",
-    "After finishing each step, call plan_progress with its 1-based index.",
+    "After finishing each step, call plan.progress (plan_progress) with its 1-based index.",
     "Ask the user before large deviations (new scope, skipped steps, or a different approach).",
     `Path: ${input.planPath}`,
     `Approved identity SHA-256: ${input.hash}`,
@@ -200,7 +202,7 @@ export function executeStatus(input: { planPath: string; remaining: number; tota
     "Executing the approved plan (source of truth).",
     `Artifact: ${input.planPath}`,
     `Checklist: ${input.total - input.remaining}/${input.total} done.`,
-    "Step through remaining items. Mark progress with plan_progress. Ask before large deviations.",
+    "Step through remaining items. Mark progress with plan.progress (plan_progress). Ask before large deviations.",
   ].join("\n")
 }
 
@@ -209,7 +211,7 @@ export function driftDenyMessage(planPath: string): string {
 }
 
 export function progressDeniedStatus(): string {
-  return "plan_progress is only for an approved plan. Use /plan then /plan-approve, or plan_write while still planning."
+  return "plan.progress / plan_progress is only for an approved plan. Use /plan then /plan-approve, or plan.write / plan_write while still planning."
 }
 
 export function progressMessage(input: { index: number; done: boolean; text: string; doc: PlanDocument }): string {
@@ -231,7 +233,7 @@ export function revisePrompt(input: { planPath: string; feedback: string }): str
   return [
     "The user rejected or asked to revise the plan. Stay in Plan mode.",
     "Do not edit the project, run mutating shell, or implement anything yet.",
-    `Update the plan artifact at ${input.planPath} (plan_write or tell the user to edit the file).`,
+    `Update the plan artifact at ${input.planPath} (plan.write / plan_write, or tell the user to edit the file).`,
     "",
     "Revision feedback:",
     input.feedback,

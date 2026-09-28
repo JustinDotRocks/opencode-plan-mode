@@ -160,6 +160,14 @@ Aspire to: enter plan → research without editing the project → produce an ed
 
 Built-in `plan` agent ([agents](https://opencode.ai/v2/docs/agents/), [permissions defaults](https://opencode.ai/v2/docs/permissions/#defaults)): primary; explores and plans without editing normal project files; may write OpenCode plan files when asked. A `/plan` **markdown** command with `agent: plan` already switches the session then submits. This plugin should **compose** that, not fight it: add the approve/hash/execute protocol and tighter session rules (especially `shell` if we want closer Cursor parity).
 
+**Grok E2E (2026-09-28):** Full plan → approve → execute succeeded with `xai/grok-4.5` (see `TEST-GROK.md`). First-pass blockers fixed/noted:
+
+| Finding | Mitigation |
+| --- | --- |
+| Built-in plan agent injects “do not create/update plan files” | `researchInstructions` now overrides and requires `plan.write` for this plugin’s artifact |
+| Tools register as namespaced `plan.write` / `plan.progress` | Prompts mention both dotted and underscore forms |
+| `opencode run "/plan …"` as chat text may not run the slash command | Use TUI slash or `POST /api/session/{id}/command` |
+
 ---
 
 ## 4. Recommended architecture
@@ -233,6 +241,8 @@ Recorded against OpenCode **2.0.18**. Implement enter/exit around these; do not 
 | **No first-class mode type** | Toggle is `/plan`, `/plan-mode`, `/plan-exit` plus `switchAgent("plan" \| previous)`. The agent switcher is not a plugin-owned Plan mode control. |
 | **Cannot register a new agent** | `AgentEditor` has no `add`. Use the built-in `plan` / `build` agents. |
 | **Cannot hide or replace the UI agent switcher** | The user can still pick `build` (or any primary) in the TUI/desktop. That does **not** run `/plan-exit` or `/plan-approve`. Session deny rules stay until `/plan-approve` or `/plan-exit`. We cannot intercept that switch to auto-exit or auto-enter. |
+| **Built-in plan system reminder** | OpenCode injects “Do not create or update plan files unless the user explicitly asks.” That fights `plan.write`. Plugin context must explicitly override (implemented in `researchInstructions`). |
+| **Slash commands vs `opencode run` text** | A message whose text starts with `/plan` is not always executed as a command callback. Prefer TUI slash or `session.command`. |
 | **No native Plan badge** | Closest UX: synthetic status + `[PLAN] ` session title prefix. No TUI chrome from a server plugin. |
 | **No in-app plan editor / sidebar** | Artifact is a markdown file under `~/.opencode/plan/`. Surfaced via `/plan-show`, prompt attachment, and context injection. A `session.panel` would need a separate `@opencode/plugin/tui` plugin. |
 | **`ctx.permission.rules` missing** | Use `ctx.session.update({ permissions })`. Empty array clears extras on exit. |
@@ -253,3 +263,32 @@ Recorded against OpenCode **2.0.18**. Implement enter/exit around these; do not 
 | `/plan-exit discard` or `/plan-mode discard` | **Discard** (unlink the file; clear storage). |
 
 OpenCode cannot present a native “Keep / Discard” modal on agent-switch. Command arguments are the gate.
+
+
+---
+
+## 7. Grok E2E findings (2026-09-28)
+
+Manual test on OpenCode **2.0.18** with **xai/grok-4.5**. Full write-up: [`TEST-GROK.md`](./TEST-GROK.md).
+
+### Worked
+
+- Plugin loads (`plan-mode` active); all `/plan*` commands registered
+- `/plan` → research-only permissions, `[PLAN]` title, skeleton artifact
+- `/plan-approve` → `build` agent, tools unlocked, identity hash, implement prompt
+- Grok implemented a one-line `package.json` description change and called `plan.progress`
+- `/plan-execute` continued; `/plan-reject` and `/plan-exit discard` behaved as designed
+- Unit tests 18/18
+
+### First-pass blockers fixed in this branch
+
+1. **Built-in plan agent reminder** (“do not create or update plan files”) fights `plan.write`.  
+   **Fix:** `researchInstructions` now overrides that reminder and requires `plan.write` for this plugin’s artifact.
+2. **Tool naming:** OpenCode registers namespaced `plan.write` / `plan.progress`; prompts only said `plan_write` / `plan_progress`.  
+   **Fix:** prompts/docs mention both forms.
+
+### Host/env caveats (not plugin bugs)
+
+- Prefer TUI slash or `POST /api/session/{id}/command` — bare `opencode run "/plan …"` may not invoke the command.
+- Pin an authenticated model (e.g. Grok) before approve if the free default fails auth.
+- Unrelated V1 packages in global config (e.g. `@stablekernel/opencode-cursor`) fail V2 load; remove if noisy.

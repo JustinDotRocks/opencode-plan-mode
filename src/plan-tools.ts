@@ -112,7 +112,7 @@ export async function registerPlanTools(ctx: Ctx): Promise<void> {
         if (isApproved(state)) {
           return {
             content:
-              "The plan is approved. Use plan_progress to mark checklist steps. To change Goal, Research, step text, or Notes, /plan-reject first (or ask the user before a large deviation).",
+              "The plan is approved. Use plan.progress / plan_progress to mark checklist steps. To change Goal, Research, step text, or Notes, /plan-reject first (or ask the user before a large deviation).",
           }
         }
         if (!isPlanning(state)) {

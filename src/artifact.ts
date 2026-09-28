@@ -209,8 +209,8 @@ export function sourceOfTruthBlock(
     ? "This snapshot was approved. Checkbox progress is allowed. If Goal, Research, step text, or Notes change, ask the user to /plan-approve again or /plan-reject."
     : "The user may edit this file in their editor at any time before approve. Re-read it before proposing changes."
   const toolsLine = options?.approved
-    ? "Follow this file. Mark checklist progress with plan_progress. Ask before large deviations. Do not treat chat-only notes as a replacement."
-    : "Use plan_read / plan_write to load or update Goal, Research, Steps, and Notes."
+    ? "Follow this file. Mark checklist progress with plan.progress / plan_progress. Ask before large deviations. Do not treat chat-only notes as a replacement."
+    : "Use plan.read / plan.write (plan_read / plan_write) to load or update Goal, Research, Steps, and Notes."
   return [
     "The plan artifact is the source of truth for this session. Follow the file, not chat-only notes.",
     `Path: ${path}`,
@@ -227,7 +227,7 @@ export function sourceOfTruthBlock(
 export function showPlanMessage(path: string, doc: PlanDocument): string {
   return [
     `Plan artifact (source of truth): ${path}`,
-    "Edit this file in your editor before approve, or ask the agent to update it with plan_write.",
+    "Edit this file in your editor before approve, or ask the agent to update it with plan.write / plan_write.",
     "OpenCode has no plan sidebar; this file plus /plan-show is how the plan is surfaced.",
     "",
     formatChecklist(doc),

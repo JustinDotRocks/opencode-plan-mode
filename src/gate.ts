@@ -128,7 +128,7 @@ export function approvedContextNote(
   const stale = approvedHash !== undefined && current !== approvedHash
   const lines = [
     "The plan was approved. Implementation tools are unlocked.",
-    "Follow the approved plan artifact. Step through the checklist; mark progress with plan_progress. Ask before large deviations. Do not expand scope.",
+    "Follow the approved plan artifact. Step through the checklist; mark progress with plan.progress / plan_progress. Ask before large deviations. Do not expand scope.",
     `Path: ${planPath}`,
     `Approved identity SHA-256: ${approvedHash ?? "(missing)"}`,
   ]
