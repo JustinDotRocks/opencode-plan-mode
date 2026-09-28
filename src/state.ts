@@ -6,6 +6,8 @@ export type SessionPlanState = {
   previousAgent: string
   previousTitle?: string
   planPath: string
+  /** SHA-256 of the artifact on disk. Refresh when the user or agent edits it. */
+  contentHash?: string
 }
 
 const live = new Map<string, SessionPlanState>()
@@ -29,6 +31,7 @@ function parseState(sessionID: string, value: unknown): SessionPlanState | undef
     previousAgent: typeof record.previousAgent === "string" ? record.previousAgent : "build",
     previousTitle: typeof record.previousTitle === "string" ? record.previousTitle : undefined,
     planPath: record.planPath,
+    contentHash: typeof record.contentHash === "string" ? record.contentHash : undefined,
   }
 }
 

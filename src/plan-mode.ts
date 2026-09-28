@@ -1,6 +1,6 @@
-import { access, unlink } from "node:fs/promises"
-import { constants } from "node:fs"
+import { unlink } from "node:fs/promises"
 import type { Plugin } from "@opencode/plugin"
+import { contentHash, ensurePlanFile, readPlanFile, showPlanMessage } from "./artifact.ts"
 import { planArtifactPath, researchOnlyRules } from "./permissions.ts"
 import {
   clearState,
@@ -22,15 +22,6 @@ import {
 } from "./status.ts"
 
 type Ctx = Plugin.Context
-
-async function draftExists(path: string): Promise<boolean> {
-  try {
-    await access(path, constants.F_OK)
-    return true
-  } catch {
-    return false
-  }
-}
 
 async function discardDraft(path: string): Promise<void> {
   try {
@@ -57,13 +48,16 @@ export async function enterPlanMode(
   const session = await ctx.session.get({ sessionID })
   const existing = await loadState(ctx.storage, sessionID)
   const planPath = existing?.planPath ?? planArtifactPath(sessionID)
-  const resumed = await draftExists(planPath)
+  const ensured = await ensurePlanFile(planPath)
+  const hash = contentHash(ensured.markdown)
+  const resumed = !ensured.created
 
   if (isPlanning(existing)) {
+    const state = { ...existing, planPath, phase: "planning" as const, contentHash: hash }
     await applyPlanningSession(ctx, sessionID, session.title)
-    await saveState(ctx.storage, { ...existing, planPath, phase: "planning" })
+    await saveState(ctx.storage, state)
     await ctx.session.synthetic({ sessionID, text: alreadyOnStatus(planPath) })
-    return { state: existing, alreadyOn: true, resumed }
+    return { state, alreadyOn: true, resumed }
   }
 
   const previousAgent =
@@ -78,15 +72,36 @@ export async function enterPlanMode(
     previousAgent,
     previousTitle,
     planPath,
+    contentHash: hash,
   }
 
   await applyPlanningSession(ctx, sessionID, session.title)
   await saveState(ctx.storage, state)
   await ctx.session.synthetic({
     sessionID,
-    text: enterStatus({ planPath, resumed }),
+    text: enterStatus({ planPath, resumed, created: ensured.created }),
   })
   return { state, alreadyOn: false, resumed }
+}
+
+export async function showPlanArtifact(ctx: Ctx, sessionID: string): Promise<void> {
+  const existing = await loadState(ctx.storage, sessionID)
+  const planPath = existing?.planPath ?? planArtifactPath(sessionID)
+  const doc = await readPlanFile(planPath)
+  if (!doc) {
+    await ctx.session.synthetic({
+      sessionID,
+      text: `No plan artifact at ${planPath}. Use /plan to create the structured skeleton, then edit it before approve.`,
+    })
+    return
+  }
+  if (existing) {
+    const hash = contentHash(doc.markdown)
+    if (existing.contentHash !== hash) {
+      await saveState(ctx.storage, { ...existing, contentHash: hash })
+    }
+  }
+  await ctx.session.synthetic({ sessionID, text: showPlanMessage(planPath, doc) })
 }
 
 export async function exitPlanMode(

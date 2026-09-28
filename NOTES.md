@@ -1,6 +1,6 @@
 # OpenCode 2 plan-mode plugin research
 
-Target: **OpenCode 2.0.18**. Research + design only — this file is not an implementation.
+Target: **OpenCode 2.0.18**. Research notes plus what this plugin implements.
 
 Official docs:
 
@@ -153,7 +153,7 @@ Aspire to: enter plan → research without editing the project → produce an ed
 | --- | --- | --- |
 | **Enter plan mode** | Command `/plan` → `switchAgent(..., "plan")` + `session.update` permissions deny `edit` except the artifact path; store `phase: "planning"` | No dedicated mode toggle in the server API. Closest UI is the agent switcher (`plan` is already a built-in primary agent). |
 | **Research-only** | Built-in `plan` already: allow questions; **deny edits except `~/.opencode/plan`**. Keep `read` / `glob` / `grep` / `webfetch` / `websearch`. Optionally `delete event.tools.write` in `context`. Optionally deny or `ask` `shell` (built-in `plan` does **not** deny shell). | Shell can still mutate files unless we add `shell` deny/`ask` + `execute.before` on `write`/`edit`/`patch`. Hiding tools is not enforcement. |
-| **Editable plan artifact** | Markdown file the user opens in their editor. Align with the built-in allowlist: `~/.opencode/plan/<sessionID>.md`, **or** a workspace path (e.g. `.opencode/plans/PLAN.md`) plus a session rule `edit` allow on that path only. Plugin tools can write/update the file; user edits it as normal text. Persist path + content hash in `ctx.storage`. | No in-app plan editor unless we add a TUI plugin later. Workspace files are more visible; `~/.opencode/plan` needs no extra allow rule. |
+| **Editable plan artifact** | **Implemented:** `~/.opencode/plan/<sessionID>.md` with Goal / Research / Steps / Notes. Skeleton on `/plan`. User edits the file; `plan_read` / `plan_write`; path + SHA-256 in `ctx.storage`. `/plan-show` + context injection + prompt attachment surface it. | No in-app plan editor unless we add a TUI plugin later. Workspace files are more visible; `~/.opencode/plan` needs no extra allow rule. |
 | **Approve / reject gate** | `/plan-approve` and `/plan-reject`, and/or the built-in `question` tool. Approve: read artifact, store `approvedHash` + `phase: "approved"`. Reject: stay in planning or clear artifact; do not lift `edit` deny. | Not a dedicated “Build” button. Commands + `question` are the supported gates. |
 | **Execute only against approved plan** | `/plan-execute` (or approve does this): verify file hash still matches `approvedHash`; if the user edited after approve, refuse and ask to re-approve. `switchAgent(..., "build")` and replace session rules with allow (or empty). Prompt: “Implement **only** this approved plan:” + file contents. | Cannot cryptographically bind the agent to the file; hash check + prompt is the API-level guarantee. Re-apply deny if they `/plan` again. |
 | **Exit** | `/plan-exit` → `switchAgent` to `build` (or previous agent), clear session deny rules, `phase: "idle"`. | Session stores selected agent; switching is the exit. |
@@ -176,7 +176,19 @@ Built-in `plan` agent ([agents](https://opencode.ai/v2/docs/agents/), [permissio
 6. **`execute.before`** as defense in depth: if `phase !== "executing"` and tool is `write`/`edit`/`patch` and path is not the artifact, throw.
 7. **`session.hook("context")`** to attach “you are planning; do not edit the project; write the plan to \<path\>”.
 
-**Artifact:** default `~/.opencode/plan/` so it matches shipped `plan` permissions. Plugin option to use a repo-relative path for people who want the plan in git; then session rules must allow that path.
+**Artifact (implemented):** `~/.opencode/plan/<sessionID>.md`. Canonical sections are Goal, Research, Steps (checkbox todos), Notes. `/plan` writes a skeleton if missing. `plan_read` / `plan_write` plus user editor edits. Session storage keeps `planPath` + `contentHash` (for the later approve hash check).
+
+**How OpenCode surfaces the plan (2.0.18):**
+
+| Surface | What the user/agent sees |
+| --- | --- |
+| Disk file | User-editable markdown. This is the document, not chat. |
+| `/plan-show` | Synthetic message with markdown + derived checklist. |
+| `session.hook("prompt")` | Attaches `file://…/plan.md` while planning so the session UI shows the file. |
+| `session.hook("context")` | Injects the **current** file + checklist on each model call (source of truth). |
+| Status + `[PLAN] ` title | Path and edit instructions on enter. |
+
+There is no server-plugin plan sidebar. A later TUI plugin could add `session.panel`.
 
 **Approve gate:** command (explicit) + optional `question` prompt when the model thinks the plan is ready. Execute refuses unless hash matches.
 
@@ -220,7 +232,7 @@ Recorded against OpenCode **2.0.18**. Implement enter/exit around these; do not 
 | **Cannot register a new agent** | `AgentEditor` has no `add`. Use the built-in `plan` / `build` agents. |
 | **Cannot hide or replace the UI agent switcher** | The user can still pick `build` (or any primary) in the TUI/desktop. That does **not** run `/plan-exit`; session deny rules stay until `/plan-exit`. We cannot intercept that switch to auto-exit or auto-enter. |
 | **No native Plan badge** | Closest UX: synthetic status + `[PLAN] ` session title prefix. No TUI chrome from a server plugin. |
-| **No in-app plan editor / sidebar** | Artifact is a markdown file under `~/.opencode/plan/`. A `session.panel` would need a separate `@opencode/plugin/tui` plugin. |
+| **No in-app plan editor / sidebar** | Artifact is a markdown file under `~/.opencode/plan/`. Surfaced via `/plan-show`, prompt attachment, and context injection. A `session.panel` would need a separate `@opencode/plugin/tui` plugin. |
 | **`ctx.permission.rules` missing** | Use `ctx.session.update({ permissions })`. Empty array clears extras on exit. |
 | **Configured `deny` skips `permission.evaluate`** | The evaluate hook cannot override an existing deny; it can only tighten `allow`/`ask`. |
 | **Hiding tools is not enforcement** | Deleting `event.tools.write` in `context` only hides them from the model. Do not hide write/edit if the agent must write the plan artifact. Enforce with session rules + `evaluate` + `execute.before`. |
