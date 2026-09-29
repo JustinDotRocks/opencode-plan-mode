@@ -131,6 +131,81 @@ export function mergePlan(existing: PlanDocument | undefined, patch: PlanPatch):
   }
 }
 
+const CANONICAL_SECTION_ORDER = ["goal", "research", "steps", "notes"] as const
+const CANONICAL_SECTION_TITLE: Record<(typeof CANONICAL_SECTION_ORDER)[number], string> = {
+  goal: "Goal",
+  research: "Research",
+  steps: "Steps",
+  notes: "Notes",
+}
+
+function sectionBodyLines(text: string): string[] {
+  return ["", ...text.replaceAll("\r\n", "\n").split("\n"), ""]
+}
+
+function findSectionHeadings(lines: readonly string[]): { name: string; headingIndex: number; bodyEnd: number }[] {
+  const starts: { name: string; headingIndex: number }[] = []
+  for (let i = 0; i < lines.length; i++) {
+    const heading = SECTION_HEADING.exec(lines[i]!)
+    if (!heading) continue
+    starts.push({ name: heading[1].trim().toLowerCase(), headingIndex: i })
+  }
+  return starts.map((start, i) => ({
+    ...start,
+    bodyEnd: starts[i + 1]?.headingIndex ?? lines.length,
+  }))
+}
+
+function applyTitleToLines(lines: string[], title: string): string[] {
+  for (let i = 0; i < lines.length; i++) {
+    if (SECTION_HEADING.test(lines[i]!)) break
+    if (TITLE_HEADING.test(lines[i]!)) {
+      const next = lines.slice()
+      next[i] = `# ${title}`
+      return next
+    }
+  }
+  const firstSection = lines.findIndex((line) => SECTION_HEADING.test(line))
+  const at = firstSection === -1 ? 0 : firstSection
+  return [...lines.slice(0, at), `# ${title}`, "", ...lines.slice(at)]
+}
+
+function upsertCanonicalSection(lines: string[], name: (typeof CANONICAL_SECTION_ORDER)[number], body: string[]): string[] {
+  const headings = findSectionHeadings(lines)
+  const found = headings.find((heading) => heading.name === name)
+  if (found) {
+    return [...lines.slice(0, found.headingIndex + 1), ...body, ...lines.slice(found.bodyEnd)]
+  }
+  const rank = CANONICAL_SECTION_ORDER.indexOf(name)
+  let at = headings[0]?.headingIndex ?? lines.length
+  for (const heading of headings) {
+    const other = CANONICAL_SECTION_ORDER.indexOf(heading.name as (typeof CANONICAL_SECTION_ORDER)[number])
+    if (other !== -1 && other < rank) at = heading.bodyEnd
+  }
+  return [...lines.slice(0, at), `## ${CANONICAL_SECTION_TITLE[name]}`, ...body, ...lines.slice(at)]
+}
+
+/** Patch canonical fields in-place so preface and extra headings are not dropped. */
+export function applyPlanPatchToMarkdown(markdown: string, patch: PlanPatch): string {
+  const newline = markdown.includes("\r\n") ? "\r\n" : "\n"
+  let lines = markdown.replaceAll("\r\n", "\n").split("\n")
+  const title = patch.title?.trim()
+  if (title) lines = applyTitleToLines(lines, title)
+  if (patch.goal !== undefined) lines = upsertCanonicalSection(lines, "goal", sectionBodyLines(patch.goal))
+  if (patch.research !== undefined) {
+    lines = upsertCanonicalSection(lines, "research", sectionBodyLines(patch.research))
+  }
+  if (patch.steps !== undefined) {
+    const checklist =
+      patch.steps.length > 0
+        ? patch.steps.map((step) => `- [${step.done ? "x" : " "}] ${step.text}`).join("\n")
+        : ""
+    lines = upsertCanonicalSection(lines, "steps", sectionBodyLines(checklist))
+  }
+  if (patch.notes !== undefined) lines = upsertCanonicalSection(lines, "notes", sectionBodyLines(patch.notes))
+  return lines.join(newline)
+}
+
 export function deriveTodos(doc: Pick<PlanDocument, "steps">): string[] {
   return doc.steps.map((step) => `- [${step.done ? "x" : " "}] ${step.text}`)
 }

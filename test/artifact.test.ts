@@ -8,6 +8,7 @@ import {
   deriveTodos,
   ensurePlanFile,
   formatChecklist,
+  applyPlanPatchToMarkdown,
   applyStepDoneToMarkdown,
   identityHash,
   identityHashFromMarkdown,
@@ -121,6 +122,46 @@ test("applyStepDoneToMarkdown only flips the matching checkbox", () => {
   assert.match(updated, /## Appendix\n\nKeep me\./)
   assert.equal(parsePlan(updated).goal, "")
   assert.equal(applyStepDoneToMarkdown(markdown, 9, true), undefined)
+})
+
+test("applyPlanPatchToMarkdown keeps extra sections and preface", () => {
+  const markdown = [
+    "<!-- keep -->",
+    "# Custom",
+    "",
+    "## Goal",
+    "",
+    "Old goal.",
+    "",
+    "## Research",
+    "",
+    "Keep research.",
+    "",
+    "## Steps",
+    "",
+    "- [ ] Wire API",
+    "",
+    "## Notes",
+    "",
+    "",
+    "## Appendix",
+    "",
+    "Keep me.",
+    "",
+  ].join("\n")
+  const updated = applyPlanPatchToMarkdown(markdown, { goal: "New goal." })
+  assert.match(updated, /<!-- keep -->/)
+  assert.match(updated, /# Custom/)
+  assert.match(updated, /New goal\./)
+  assert.match(updated, /Keep research\./)
+  assert.match(updated, /## Appendix\n\nKeep me\./)
+  const withResearch = applyPlanPatchToMarkdown(
+    ["# Custom", "", "## Goal", "", "G", "", "## Appendix", "", "Keep me.", ""].join("\n"),
+    { research: "Inserted." },
+  )
+  assert.match(withResearch, /## Research\n\nInserted\./)
+  assert.match(withResearch, /## Appendix\n\nKeep me\./)
+  assert.ok(withResearch.indexOf("## Research") < withResearch.indexOf("## Appendix"))
 })
 
 test("identityHash does not treat empty sections as skeleton placeholders", () => {

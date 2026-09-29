@@ -1,11 +1,13 @@
 import type { Plugin } from "@opencode/plugin"
 import {
+  applyPlanPatchToMarkdown,
   contentHash,
   mergePlan,
   parsePlan,
   readPlanFile,
   renderPlan,
   writePlanFile,
+  type PlanPatch,
   type PlanStep,
 } from "./artifact.ts"
 import { applyApprovedProgress } from "./execute.ts"
@@ -122,14 +124,16 @@ export async function registerPlanTools(ctx: Ctx): Promise<void> {
         const path = state.planPath
         const existing = await readPlanFile(path)
         const record = (input ?? {}) as Record<string, unknown>
-        const merged = mergePlan(existing, {
+        const patch: PlanPatch = {
           title: typeof record.title === "string" ? record.title : undefined,
           goal: typeof record.goal === "string" ? record.goal : undefined,
           research: typeof record.research === "string" ? record.research : undefined,
           steps: asSteps(record.steps),
           notes: typeof record.notes === "string" ? record.notes : undefined,
-        })
-        const markdown = renderPlan(merged)
+        }
+        const markdown = existing
+          ? applyPlanPatchToMarkdown(existing.markdown, patch)
+          : renderPlan(mergePlan(undefined, patch))
         await writePlanFile(path, markdown)
         await rememberHash(ctx, context.sessionID, markdown)
         const written = parsePlan(markdown)
