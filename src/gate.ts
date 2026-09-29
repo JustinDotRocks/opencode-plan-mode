@@ -1,6 +1,6 @@
 import { pathToFileURL } from "node:url"
 import type { Plugin } from "@opencode/plugin"
-import { contentHash, readPlanFile, type PlanDocument } from "./artifact.ts"
+import { contentHash, identityHash, identityHashFromMarkdown, readPlanFile, type PlanDocument } from "./artifact.ts"
 import { applyPlanningSession } from "./plan-mode.ts"
 import { hasPlanSession, isApproved, loadState, saveState, type SessionPlanState } from "./state.ts"
 import {
@@ -16,8 +16,9 @@ import {
 
 type Ctx = Plugin.Context
 
+/** True when Goal/Research/step text/Notes match. Checklist progress is ignored. */
 export function hashesMatch(approvedHash: string | undefined, markdown: string): boolean {
-  return approvedHash !== undefined && approvedHash === contentHash(markdown)
+  return approvedHash !== undefined && approvedHash === identityHashFromMarkdown(markdown)
 }
 
 export function gateIdleReason(state: SessionPlanState | undefined): string | undefined {
@@ -33,7 +34,7 @@ function planFileRef(planPath: string, description: string): { uri: string; name
   }
 }
 
-async function unlockForBuild(ctx: Ctx, sessionID: string, state: SessionPlanState): Promise<void> {
+export async function unlockForBuild(ctx: Ctx, sessionID: string, state: SessionPlanState): Promise<void> {
   const session = await ctx.session.get({ sessionID })
   const agent = state.previousAgent || "build"
   const title = withoutPlanTitle(session.title, state.previousTitle)
@@ -59,7 +60,7 @@ export async function approvePlan(ctx: Ctx, sessionID: string, rawArgs: string |
     return
   }
 
-  const hash = contentHash(doc.markdown)
+  const hash = identityHash(doc)
   const notes = (rawArgs ?? "").trim()
 
   if (isApproved(existing) && hashesMatch(existing.approvedHash, doc.markdown) && !notes) {
@@ -71,7 +72,7 @@ export async function approvePlan(ctx: Ctx, sessionID: string, rawArgs: string |
   const state: SessionPlanState = {
     ...existing,
     phase: "approved",
-    contentHash: hash,
+    contentHash: contentHash(doc.markdown),
     approvedHash: hash,
   }
   await saveState(ctx.storage, state)
@@ -123,17 +124,17 @@ export function approvedContextNote(
   doc: PlanDocument,
   approvedHash: string | undefined,
 ): string {
-  const current = contentHash(doc.markdown)
+  const current = identityHash(doc)
   const stale = approvedHash !== undefined && current !== approvedHash
   const lines = [
     "The plan was approved. Implementation tools are unlocked.",
-    "Follow the approved plan artifact. Do not expand scope.",
+    "Follow the approved plan artifact. Step through the checklist; mark progress with plan_progress. Ask before large deviations. Do not expand scope.",
     `Path: ${planPath}`,
-    `Approved SHA-256: ${approvedHash ?? "(missing)"}`,
+    `Approved identity SHA-256: ${approvedHash ?? "(missing)"}`,
   ]
   if (stale) {
     lines.push(
-      `The file on disk has changed (SHA-256 ${current}). Stop implementing unapproved edits. Ask the user to /plan-approve again or /plan-reject.`,
+      `The approved plan content changed (identity SHA-256 ${current}). Checkbox progress is allowed; Goal, Research, step text, and Notes are not. Stop implementing. Ask the user to /plan-approve again or /plan-reject.`,
     )
   }
   return lines.join(" ")

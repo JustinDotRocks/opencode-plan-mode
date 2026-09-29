@@ -2,7 +2,7 @@
 
 OpenCode 2 plugin: Cursor-like plan mode (draft a plan, gate edits until approved, then execute).
 
-This package loads as plugin id `plan-mode` on OpenCode **2.0.18**. This revision adds an explicit approve / reject gate on top of the editable plan artifact.
+This package loads as plugin id `plan-mode` on OpenCode **2.0.18**. This revision executes against the approved plan as the source of truth (stacked on the approve / reject gate).
 
 ## Plan mode toggle
 
@@ -15,6 +15,7 @@ OpenCode has no first-class mode type. This plugin’s toggle is commands plus t
 | `/plan-exit` | Exit **without approving**. Default **keep** the draft. `/plan-exit discard` deletes it. |
 | `/plan-show` | Reprint the current artifact and derived checklist in the session. |
 | `/plan-approve` | Approve the artifact, unlock implementation tools, and follow that file. Extra args are optional notes. |
+| `/plan-execute` | Execute the **approved** plan. Extra args are optional notes. Hard-refuses if Goal / Research / step text / Notes drifted. |
 | `/plan-reject` | Reject or revise. Stay in Plan mode; extra args are feedback. No project changes. |
 | `/plan-revise` | Alias of `/plan-reject`. |
 
@@ -29,14 +30,22 @@ While Plan mode is on (not yet approved):
 
 | Action | Tools | Artifact |
 | --- | --- | --- |
-| `/plan-approve` | Unlocked (`build` agent, session deny rules cleared). Agent is prompted to implement **only** this file. SHA-256 stored as `approvedHash`. | Kept. Source of truth for implementation. |
+| `/plan-approve` | Unlocked (`build` agent, session deny rules cleared). Agent is prompted to implement **only** this file. Identity SHA-256 stored as `approvedHash`. | Kept. Source of truth for implementation. |
+| `/plan-execute` | Re-prompts the `build` agent to continue the approved file. Refuses (does not prompt) if plan **content** drifted. | Kept. Checkbox progress is allowed. |
 | `/plan-reject` or `/plan-revise` | Stay locked (research only). If the plan was already approved, tools are locked again. | Kept. Agent updates it when feedback is passed. |
 | `/plan-exit` or `/plan-mode` | Unlocked without implementing. | **Kept** on disk. Re-enter with `/plan` to resume. |
 | `/plan-exit discard` or `/plan-mode discard` | Unlocked without implementing. | **Discarded** (file deleted). |
 
 OpenCode 2.0.18 has no native Approve button. These commands are the gate.
 
-If the file changes after approve, context warns the agent to re-approve or reject. Hard hash enforcement on execute is a follow-up.
+### Execute against the approved plan
+
+After approve, the artifact is the source of truth:
+
+- The agent must step through the Steps checklist in order and call `plan_progress` after each finished item.
+- Stay on-plan. Ask the user before large deviations (new scope, skipped steps, or a different approach).
+- **Checkbox progress** (`[ ]` → `[x]`) does **not** invalidate approval.
+- Edits to Goal, Research, step **text**, or Notes after approve **do** invalidate it. `/plan-execute` hard-refuses; mutating project tools are denied until `/plan-approve` or `/plan-reject`.
 
 ## Plan artifact (source of truth)
 
@@ -74,7 +83,8 @@ Steps under `## Steps` are parsed into a checklist (todos). `/plan-show` and the
 | Tool | Role |
 | --- | --- |
 | `plan_read` | Load the latest file from disk. |
-| `plan_write` | Update Goal / Research / Steps / Notes (omit a field to keep it). |
+| `plan_write` | Update Goal / Research / Steps / Notes while planning (omit a field to keep it). |
+| `plan_progress` | After approve, mark a 1-based checklist step done or reopened. Does not change step text. |
 
 The built-in `write` / `edit` tools can still change this file while planning; project files stay blocked.
 
@@ -112,12 +122,12 @@ opencode service restart
 opencode plugin list
 ```
 
-`plan-mode` should be **active**. Use `/plan` or `/plan-mode` in a session, then `/plan-show` after the artifact exists. `/plan-approve` / `/plan-reject` are the explicit gate.
+`plan-mode` should be **active**. Use `/plan` or `/plan-mode` in a session, then `/plan-show` after the artifact exists. `/plan-approve` / `/plan-reject` are the explicit gate; `/plan-execute` continues an approved plan.
 
-Parse/render and gate tests (optional):
+Parse/render, gate, and execute tests (optional):
 
 ```sh
-npx tsx --test test/artifact.test.ts test/gate.test.ts
+npx tsx --test test/artifact.test.ts test/gate.test.ts test/execute.test.ts
 ```
 
 See `NOTES.md` for OpenCode API limits (what this plugin cannot gate).

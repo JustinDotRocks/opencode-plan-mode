@@ -145,6 +145,34 @@ export function contentHash(markdown: string): string {
   return createHash("sha256").update(markdown).digest("hex")
 }
 
+/** Plan identity ignores checklist progress (`[x]` vs `[ ]`). */
+export function withOpenSteps(doc: Omit<PlanDocument, "markdown">): Omit<PlanDocument, "markdown"> {
+  return {
+    title: doc.title,
+    goal: doc.goal,
+    research: doc.research,
+    steps: doc.steps.map((step) => ({ text: step.text, done: false })),
+    notes: doc.notes,
+  }
+}
+
+export function identityHash(doc: Omit<PlanDocument, "markdown">): string {
+  return contentHash(renderPlan(withOpenSteps(doc)))
+}
+
+export function identityHashFromMarkdown(markdown: string): string {
+  return identityHash(parsePlan(markdown))
+}
+
+export function remainingSteps(doc: Pick<PlanDocument, "steps">): PlanStep[] {
+  return doc.steps.filter((step) => !step.done)
+}
+
+export function setStepDone(steps: readonly PlanStep[], index: number, done: boolean): PlanStep[] | undefined {
+  if (!Number.isInteger(index) || index < 1 || index > steps.length) return undefined
+  return steps.map((step, i) => (i === index - 1 ? { text: step.text, done } : step))
+}
+
 export async function readPlanFile(path: string): Promise<PlanDocument | undefined> {
   try {
     const markdown = await readFile(path, "utf8")
@@ -178,10 +206,10 @@ export function sourceOfTruthBlock(
   options?: { approved?: boolean },
 ): string {
   const editLine = options?.approved
-    ? "This snapshot was approved. If the user edits the file, ask them to /plan-approve again or /plan-reject."
+    ? "This snapshot was approved. Checkbox progress is allowed. If Goal, Research, step text, or Notes change, ask the user to /plan-approve again or /plan-reject."
     : "The user may edit this file in their editor at any time before approve. Re-read it before proposing changes."
   const toolsLine = options?.approved
-    ? "Follow this file. Do not treat chat-only notes as a replacement."
+    ? "Follow this file. Mark checklist progress with plan_progress. Ask before large deviations. Do not treat chat-only notes as a replacement."
     : "Use plan_read / plan_write to load or update Goal, Research, Steps, and Notes."
   return [
     "The plan artifact is the source of truth for this session. Follow the file, not chat-only notes.",
