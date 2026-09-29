@@ -42,7 +42,7 @@ OpenCode 2.0.18 has no native Approve button. These commands are the gate.
 
 After approve, the artifact is the source of truth:
 
-- The agent must step through the Steps checklist in order and call `plan_progress` after each finished item.
+- The agent must step through the Steps checklist in order and call `plan.progress` (`plan_progress`) after each finished item.
 - Stay on-plan. Ask the user before large deviations (new scope, skipped steps, or a different approach).
 - **Checkbox progress** (`[ ]` → `[x]`) does **not** invalidate approval.
 - Edits to Goal, Research, step **text**, or Notes after approve **do** invalidate it. `/plan-execute` hard-refuses; mutating project tools are denied until `/plan-approve` or `/plan-reject`.
@@ -82,9 +82,9 @@ Steps under `## Steps` are parsed into a checklist (todos). `/plan-show` and the
 
 | Tool | Role |
 | --- | --- |
-| `plan_read` | Load the latest file from disk. |
-| `plan_write` | Update Goal / Research / Steps / Notes while planning (omit a field to keep it). |
-| `plan_progress` | After approve, mark a 1-based checklist step done or reopened. Does not change step text. |
+| `plan.read` (`plan_read`) | Load the latest file from disk. |
+| `plan.write` (`plan_write`) | Update Goal / Research / Steps / Notes while planning (omit a field to keep it). |
+| `plan.progress` (`plan_progress`) | After approve, mark a 1-based checklist step done or reopened. Does not change step text. |
 
 The built-in `write` / `edit` tools can still change this file while planning; project files stay blocked.
 
@@ -130,4 +130,12 @@ Parse/render, gate, and execute tests (optional):
 npx tsx --test test/artifact.test.ts test/gate.test.ts test/execute.test.ts
 ```
 
+### Manual E2E (Grok)
+
+See `TEST-GROK.md` for a full Grok 4.5 run on OpenCode 2.0.18 (plan → approve → execute).
+
+Invoke slash commands from the TUI or `POST /api/session/{id}/command`. A plain `opencode run "/plan …"` message may **not** enter Plan mode (the text is treated as chat, not a command).
+
 See `NOTES.md` for OpenCode API limits (what this plugin cannot gate).
+
+Manual E2E with Grok (2026-09-28): see `TEST-GROK.md` (plan → approve → execute worked; first-pass blockers fixed in prompts).
