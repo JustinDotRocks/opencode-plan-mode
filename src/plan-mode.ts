@@ -153,6 +153,8 @@ export async function exitPlanMode(
     })
   }
 
+  const wasApproved = isApproved(existing)
+
   if (intent === "discard") {
     await discardDraft(planPath)
     await clearState(ctx.storage, sessionID)
@@ -162,7 +164,7 @@ export async function exitPlanMode(
 
   await ctx.session.synthetic({
     sessionID,
-    text: exitStatus({ intent, planPath }),
+    text: exitStatus({ intent, planPath, wasApproved }),
   })
 }
 
