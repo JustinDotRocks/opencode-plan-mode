@@ -4,6 +4,8 @@ import { contentHash, ensurePlanFile, readPlanFile, showPlanMessage } from "./ar
 import { planArtifactPath, researchOnlyRules } from "./permissions.ts"
 import {
   clearState,
+  hasPlanSession,
+  isApproved,
   isPlanning,
   loadState,
   saveState,
@@ -32,7 +34,11 @@ async function discardDraft(path: string): Promise<void> {
   }
 }
 
-async function applyPlanningSession(ctx: Ctx, sessionID: string, title: string | undefined): Promise<void> {
+export async function applyPlanningSession(
+  ctx: Ctx,
+  sessionID: string,
+  title: string | undefined,
+): Promise<void> {
   await ctx.session.switchAgent({ sessionID, agent: "plan" })
   await ctx.session.update({
     sessionID,
@@ -53,7 +59,13 @@ export async function enterPlanMode(
   const resumed = !ensured.created
 
   if (isPlanning(existing)) {
-    const state = { ...existing, planPath, phase: "planning" as const, contentHash: hash }
+    const state: SessionPlanState = {
+      ...existing,
+      planPath,
+      phase: "planning",
+      contentHash: hash,
+      approvedHash: undefined,
+    }
     await applyPlanningSession(ctx, sessionID, session.title)
     await saveState(ctx.storage, state)
     await ctx.session.synthetic({ sessionID, text: alreadyOnStatus(planPath) })
@@ -61,10 +73,11 @@ export async function enterPlanMode(
   }
 
   const previousAgent =
-    session.agent && session.agent !== "plan" ? session.agent : (existing?.previousAgent ?? "build")
+    existing?.previousAgent ??
+    (session.agent && session.agent !== "plan" ? session.agent : "build")
   const previousTitle = session.title?.startsWith(PLAN_TITLE_PREFIX)
     ? (existing?.previousTitle ?? withoutPlanTitle(session.title))
-    : session.title
+    : (existing?.previousTitle ?? session.title)
 
   const state: SessionPlanState = {
     phase: "planning",
@@ -73,6 +86,7 @@ export async function enterPlanMode(
     previousTitle,
     planPath,
     contentHash: hash,
+    approvedHash: undefined,
   }
 
   await applyPlanningSession(ctx, sessionID, session.title)
@@ -114,7 +128,7 @@ export async function exitPlanMode(
   const existing = await loadState(ctx.storage, sessionID)
   const planPath = existing?.planPath ?? planArtifactPath(sessionID)
 
-  if (!isPlanning(existing)) {
+  if (!hasPlanSession(existing) || !existing) {
     if (intent === "discard") {
       await discardDraft(planPath)
       if (existing) await clearState(ctx.storage, sessionID)
@@ -128,20 +142,22 @@ export async function exitPlanMode(
     return
   }
 
-  const agent = existing.previousAgent || "build"
-  const title = withoutPlanTitle(session.title, existing.previousTitle)
-  await ctx.session.switchAgent({ sessionID, agent })
-  await ctx.session.update({
-    sessionID,
-    ...(title !== undefined ? { title } : {}),
-    permissions: [],
-  })
+  if (!isApproved(existing)) {
+    const agent = existing.previousAgent || "build"
+    const title = withoutPlanTitle(session.title, existing.previousTitle)
+    await ctx.session.switchAgent({ sessionID, agent })
+    await ctx.session.update({
+      sessionID,
+      ...(title !== undefined ? { title } : {}),
+      permissions: [],
+    })
+  }
 
   if (intent === "discard") {
     await discardDraft(planPath)
     await clearState(ctx.storage, sessionID)
   } else {
-    await saveState(ctx.storage, { ...existing, phase: "idle" })
+    await saveState(ctx.storage, { ...existing, phase: "idle", approvedHash: undefined })
   }
 
   await ctx.session.synthetic({

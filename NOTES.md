@@ -154,7 +154,7 @@ Aspire to: enter plan → research without editing the project → produce an ed
 | **Enter plan mode** | Command `/plan` → `switchAgent(..., "plan")` + `session.update` permissions deny `edit` except the artifact path; store `phase: "planning"` | No dedicated mode toggle in the server API. Closest UI is the agent switcher (`plan` is already a built-in primary agent). |
 | **Research-only** | Built-in `plan` already: allow questions; **deny edits except `~/.opencode/plan`**. Keep `read` / `glob` / `grep` / `webfetch` / `websearch`. Optionally `delete event.tools.write` in `context`. Optionally deny or `ask` `shell` (built-in `plan` does **not** deny shell). | Shell can still mutate files unless we add `shell` deny/`ask` + `execute.before` on `write`/`edit`/`patch`. Hiding tools is not enforcement. |
 | **Editable plan artifact** | **Implemented:** `~/.opencode/plan/<sessionID>.md` with Goal / Research / Steps / Notes. Skeleton on `/plan`. User edits the file; `plan_read` / `plan_write`; path + SHA-256 in `ctx.storage`. `/plan-show` + context injection + prompt attachment surface it. | No in-app plan editor unless we add a TUI plugin later. Workspace files are more visible; `~/.opencode/plan` needs no extra allow rule. |
-| **Approve / reject gate** | `/plan-approve` and `/plan-reject`, and/or the built-in `question` tool. Approve: read artifact, store `approvedHash` + `phase: "approved"`. Reject: stay in planning or clear artifact; do not lift `edit` deny. | Not a dedicated “Build” button. Commands + `question` are the supported gates. |
+| **Approve / reject gate** | **Implemented:** `/plan-approve`, `/plan-reject`, `/plan-revise`. Approve: snapshot SHA-256, `phase: "approved"`, switch to `build`, clear session deny rules, prompt to implement **only** the file. Reject: stay/return to `planning`, re-apply research-only rules, optional feedback to revise the artifact. | Not a dedicated “Build” button. Commands are the gate. The built-in `question` tool is not wired (answers would be chat, not a command). |
 | **Execute only against approved plan** | `/plan-execute` (or approve does this): verify file hash still matches `approvedHash`; if the user edited after approve, refuse and ask to re-approve. `switchAgent(..., "build")` and replace session rules with allow (or empty). Prompt: “Implement **only** this approved plan:” + file contents. | Cannot cryptographically bind the agent to the file; hash check + prompt is the API-level guarantee. Re-apply deny if they `/plan` again. |
 | **Exit** | `/plan-exit` → `switchAgent` to `build` (or previous agent), clear session deny rules, `phase: "idle"`. | Session stores selected agent; switching is the exit. |
 
@@ -173,10 +173,10 @@ Built-in `plan` agent ([agents](https://opencode.ai/v2/docs/agents/), [permissio
 3. **Commands** as the user-facing enter / approve / reject / execute / exit API (works in TUI, desktop, and `opencode run`).
 4. **Session `update({ permissions })`** as the hard gate (deny `edit` except artifact; deny `shell` and `execute` while planning).
 5. **`ctx.storage`** for phase + approved hash (durable, plugin-scoped).
-6. **`execute.before`** as defense in depth: if `phase !== "executing"` and tool is `write`/`edit`/`patch` and path is not the artifact, throw.
-7. **`session.hook("context")`** to attach “you are planning; do not edit the project; write the plan to \<path\>”.
+6. **`execute.before`** as defense in depth: if `phase === "planning"` and tool is `write`/`edit`/`patch` and path is not the artifact, throw. After approve, this hook does not fire those denies.
+7. **`session.hook("context")`** to attach planning instructions, or after approve “follow this approved plan”.
 
-**Artifact (implemented):** `~/.opencode/plan/<sessionID>.md`. Canonical sections are Goal, Research, Steps (checkbox todos), Notes. `/plan` writes a skeleton if missing. `plan_read` / `plan_write` plus user editor edits. Session storage keeps `planPath` + `contentHash` (for the later approve hash check).
+**Artifact (implemented):** `~/.opencode/plan/<sessionID>.md`. Canonical sections are Goal, Research, Steps (checkbox todos), Notes. `/plan` writes a skeleton if missing. `plan_read` / `plan_write` plus user editor edits. Session storage keeps `planPath` + `contentHash` + `approvedHash`.
 
 **How OpenCode surfaces the plan (2.0.18):**
 
@@ -190,7 +190,7 @@ Built-in `plan` agent ([agents](https://opencode.ai/v2/docs/agents/), [permissio
 
 There is no server-plugin plan sidebar. A later TUI plugin could add `session.panel`.
 
-**Approve gate:** command (explicit) + optional `question` prompt when the model thinks the plan is ready. Execute refuses unless hash matches.
+**Approve gate (implemented):** `/plan-approve` / `/plan-reject` / `/plan-revise`. Session storage keeps `approvedHash`. Until approved, `permission.evaluate` + `execute.before` still deny project `edit`/`write`/`patch`, `shell`, and `execute`. On approve, those session rules are cleared and the `build` agent is prompted with the file. On reject, rules stay (or are re-applied). If the file hash diverges after approve, context warns; the execute card will hard-refuse.
 
 **Out of scope for v1 (API limits):** Cursor plan sidebar, drag-to-reorder todos in a native panel, preventing the user from switching agents in the UI. A later TUI plugin could add a `session.panel` named `plan-mode.plan`.
 
@@ -230,7 +230,7 @@ Recorded against OpenCode **2.0.18**. Implement enter/exit around these; do not 
 | --- | --- |
 | **No first-class mode type** | Toggle is `/plan`, `/plan-mode`, `/plan-exit` plus `switchAgent("plan" \| previous)`. The agent switcher is not a plugin-owned Plan mode control. |
 | **Cannot register a new agent** | `AgentEditor` has no `add`. Use the built-in `plan` / `build` agents. |
-| **Cannot hide or replace the UI agent switcher** | The user can still pick `build` (or any primary) in the TUI/desktop. That does **not** run `/plan-exit`; session deny rules stay until `/plan-exit`. We cannot intercept that switch to auto-exit or auto-enter. |
+| **Cannot hide or replace the UI agent switcher** | The user can still pick `build` (or any primary) in the TUI/desktop. That does **not** run `/plan-exit` or `/plan-approve`. Session deny rules stay until `/plan-approve` or `/plan-exit`. We cannot intercept that switch to auto-exit or auto-enter. |
 | **No native Plan badge** | Closest UX: synthetic status + `[PLAN] ` session title prefix. No TUI chrome from a server plugin. |
 | **No in-app plan editor / sidebar** | Artifact is a markdown file under `~/.opencode/plan/`. Surfaced via `/plan-show`, prompt attachment, and context injection. A `session.panel` would need a separate `@opencode/plugin/tui` plugin. |
 | **`ctx.permission.rules` missing** | Use `ctx.session.update({ permissions })`. Empty array clears extras on exit. |
@@ -240,7 +240,7 @@ Recorded against OpenCode **2.0.18**. Implement enter/exit around these; do not 
 | **Shell is not denied by built-in `plan`** | Plugin adds session `shell` + `execute` deny while `phase === "planning"`. Directory inference on shell is best-effort; MCP tools are not covered. |
 | **Prompt hooks cannot reject** | Cannot block a user prompt that says “just implement it”; we can only inject research-only instructions. |
 | **User filesystem edits** | Permissions apply to the agent, not the user’s editor. |
-| **No cryptographic bind to the plan file** | Approve/execute (later) can hash-check; the model is not bound to the file. |
+| **No cryptographic bind to the plan file** | `/plan-approve` stores `approvedHash`. Context warns if the file changes. The model is still not bound to the file; execute-card hash refuse is the remaining guarantee. |
 | **Cannot prevent Code Mode nested tools except `execute` deny** | Session rule `{ action: "execute", effect: "deny" }` is the documented Code Mode gate. |
 
 ### Exit without approve (documented behavior)

@@ -1,6 +1,7 @@
 import { pathToFileURL } from "node:url"
 import { Plugin } from "@opencode/plugin"
 import { contentHash, readPlanFile, sourceOfTruthBlock } from "./artifact.ts"
+import { approvePlan, approvedContextNote, rejectPlan } from "./gate.ts"
 import { enterPlanMode, exitPlanMode, showPlanArtifact, togglePlanMode } from "./plan-mode.ts"
 import { registerPlanTools } from "./plan-tools.ts"
 import {
@@ -8,8 +9,8 @@ import {
   shouldDenyPlanningEdit,
   toolInputPaths,
 } from "./permissions.ts"
-import { isPlanning, loadState, saveState } from "./state.ts"
-import { researchInstructions } from "./status.ts"
+import { hasPlanSession, isApproved, isPlanning, loadState, saveState } from "./state.ts"
+import { approvedInstructions, researchInstructions } from "./status.ts"
 
 export default Plugin.define({
   id: "plan-mode",
@@ -59,30 +60,71 @@ export default Plugin.define({
           await showPlanArtifact(ctx, sessionID)
         },
       })
+
+      editor.add({
+        name: "plan-approve",
+        description: "Approve the plan artifact, unlock implementation tools, and follow that file",
+        execute: async ({ sessionID, prompt }) => {
+          await approvePlan(ctx, sessionID, prompt.text)
+        },
+      })
+
+      editor.add({
+        name: "plan-reject",
+        description: "Reject or revise the plan. Stay in Plan mode; extra args are feedback.",
+        execute: async ({ sessionID, prompt }) => {
+          await rejectPlan(ctx, sessionID, prompt.text)
+        },
+      })
+
+      editor.add({
+        name: "plan-revise",
+        description: "Revise the plan (alias of /plan-reject). Stay in Plan mode; extra args are feedback.",
+        execute: async ({ sessionID, prompt }) => {
+          await rejectPlan(ctx, sessionID, prompt.text)
+        },
+      })
     })
 
     await ctx.session.hook("context", async (event) => {
       const state = await loadState(ctx.storage, event.sessionID)
-      if (!isPlanning(state)) return
-      event.system.push({
-        type: "text",
-        text: researchInstructions(state.planPath),
-      })
+      if (!hasPlanSession(state) || !state) return
       const doc = await readPlanFile(state.planPath)
-      if (!doc) return
-      const hash = contentHash(doc.markdown)
-      if (state.contentHash !== hash) {
-        await saveState(ctx.storage, { ...state, contentHash: hash })
+      if (doc) {
+        const hash = contentHash(doc.markdown)
+        if (state.contentHash !== hash) {
+          await saveState(ctx.storage, { ...state, contentHash: hash })
+        }
       }
+
+      if (isPlanning(state)) {
+        event.system.push({
+          type: "text",
+          text: researchInstructions(state.planPath),
+        })
+      } else if (isApproved(state)) {
+        event.system.push({
+          type: "text",
+          text: approvedInstructions(state.planPath),
+        })
+        if (doc) {
+          event.system.push({
+            type: "text",
+            text: approvedContextNote(state.planPath, doc, state.approvedHash),
+          })
+        }
+      }
+
+      if (!doc) return
       event.system.push({
         type: "text",
-        text: sourceOfTruthBlock(state.planPath, doc),
+        text: sourceOfTruthBlock(state.planPath, doc, { approved: isApproved(state) }),
       })
     })
 
     await ctx.session.hook("prompt", async (event) => {
       const state = await loadState(ctx.storage, event.sessionID)
-      if (!isPlanning(state)) return
+      if (!hasPlanSession(state) || !state) return
       const doc = await readPlanFile(state.planPath)
       if (!doc) return
       const uri = pathToFileURL(state.planPath).href
@@ -91,7 +133,9 @@ export default Plugin.define({
       event.prompt.files.push({
         uri,
         name: "plan.md",
-        description: "Session plan artifact (source of truth). Edit before approve.",
+        description: isApproved(state)
+          ? "Approved plan artifact (source of truth)."
+          : "Session plan artifact (source of truth). Edit before approve.",
       })
     })
 
@@ -101,13 +145,14 @@ export default Plugin.define({
 
       if (event.action === "shell" || event.action === "execute") {
         event.effect = "deny"
-        event.message = "Plan mode is ON (research only). Shell and Code Mode are blocked until you /plan-exit."
+        event.message =
+          "Plan mode is ON (research only). Shell and Code Mode are blocked until /plan-approve."
         return
       }
 
       if (event.action === "edit" && shouldDenyPlanningEdit(event.resources, event.sessionID)) {
         event.effect = "deny"
-        event.message = `Plan mode is ON (research only). Project edits are blocked. Write the plan at ${state.planPath}.`
+        event.message = `Plan mode is ON (research only). Project edits are blocked until /plan-approve. Write the plan at ${state.planPath}.`
       }
     })
 
@@ -118,11 +163,9 @@ export default Plugin.define({
       const paths = toolInputPaths(event.input)
       if (shouldDenyPlanningEdit(paths, event.sessionID)) {
         throw new Error(
-          `Plan mode is ON (research only). Cannot ${event.tool} project files. Write the plan at ${state.planPath}.`,
+          `Plan mode is ON (research only). Cannot ${event.tool} project files until /plan-approve. Write the plan at ${state.planPath}.`,
         )
       }
     })
   },
 })
-
-

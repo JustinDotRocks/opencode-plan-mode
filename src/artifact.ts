@@ -172,12 +172,22 @@ export async function ensurePlanFile(
   return { created: true, markdown, doc: parsePlan(markdown) }
 }
 
-export function sourceOfTruthBlock(path: string, doc: PlanDocument): string {
+export function sourceOfTruthBlock(
+  path: string,
+  doc: PlanDocument,
+  options?: { approved?: boolean },
+): string {
+  const editLine = options?.approved
+    ? "This snapshot was approved. If the user edits the file, ask them to /plan-approve again or /plan-reject."
+    : "The user may edit this file in their editor at any time before approve. Re-read it before proposing changes."
+  const toolsLine = options?.approved
+    ? "Follow this file. Do not treat chat-only notes as a replacement."
+    : "Use plan_read / plan_write to load or update Goal, Research, Steps, and Notes."
   return [
     "The plan artifact is the source of truth for this session. Follow the file, not chat-only notes.",
     `Path: ${path}`,
-    "The user may edit this file in their editor at any time before approve. Re-read it before proposing changes.",
-    "Use plan_read / plan_write to load or update Goal, Research, Steps, and Notes.",
+    editLine,
+    toolsLine,
     formatChecklist(doc),
     "",
     "----- plan artifact -----",

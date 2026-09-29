@@ -1,0 +1,134 @@
+import assert from "node:assert/strict"
+import { test } from "node:test"
+import { contentHash, parsePlan, renderPlan, sourceOfTruthBlock } from "../src/artifact.ts"
+import { approvedContextNote, gateIdleReason, hashesMatch } from "../src/gate.ts"
+import {
+  parseSessionState,
+  isApproved,
+  isPlanning,
+  hasPlanSession,
+  type SessionPlanState,
+} from "../src/state.ts"
+import {
+  alreadyApprovedStatus,
+  approveStatus,
+  approvedImplementPrompt,
+  gateIdleStatus,
+  rejectStatus,
+  researchInstructions,
+  revisePrompt,
+} from "../src/status.ts"
+
+function sampleMarkdown(): string {
+  return renderPlan({
+    title: "Ship search",
+    goal: "Add search.",
+    research: "Index exists.",
+    steps: [{ text: "Wire API", done: false }],
+    notes: "No UI yet.",
+  })
+}
+
+function planningState(overrides: Partial<SessionPlanState> = {}): SessionPlanState {
+  return {
+    phase: "planning",
+    sessionID: "ses_test",
+    previousAgent: "build",
+    planPath: "/tmp/plan.md",
+    contentHash: "abc",
+    ...overrides,
+  }
+}
+
+test("parseSessionState accepts approved phase and approvedHash", () => {
+  const parsed = parseSessionState("ses_test", {
+    phase: "approved",
+    planPath: "/tmp/plan.md",
+    previousAgent: "build",
+    contentHash: "aa",
+    approvedHash: "bb",
+  })
+  assert.ok(parsed)
+  assert.equal(parsed.phase, "approved")
+  assert.equal(parsed.approvedHash, "bb")
+  assert.equal(isApproved(parsed), true)
+  assert.equal(isPlanning(parsed), false)
+  assert.equal(hasPlanSession(parsed), true)
+})
+
+test("parseSessionState rejects unknown phases", () => {
+  assert.equal(parseSessionState("ses_test", { phase: "executing", planPath: "/tmp/x.md" }), undefined)
+  assert.equal(parseSessionState("ses_test", { phase: "planning" }), undefined)
+})
+
+test("gateIdleReason blocks idle and missing state", () => {
+  assert.equal(gateIdleReason(undefined), gateIdleStatus())
+  assert.equal(gateIdleReason(planningState({ phase: "idle" })), gateIdleStatus())
+  assert.equal(gateIdleReason(planningState()), undefined)
+  assert.equal(gateIdleReason(planningState({ phase: "approved", approvedHash: "x" })), undefined)
+})
+
+test("hashesMatch compares SHA-256 of the current file to approvedHash", () => {
+  const markdown = sampleMarkdown()
+  const hash = contentHash(markdown)
+  assert.equal(hash.length, 64)
+  assert.equal(hashesMatch(hash, markdown), true)
+  assert.equal(hashesMatch("deadbeef", markdown), false)
+  assert.equal(hashesMatch(undefined, markdown), false)
+})
+
+test("approve and reject status copy describe the gate", () => {
+  const approved = approveStatus({ planPath: "/tmp/plan.md", hash: "abc" })
+  assert.match(approved, /APPROVED/)
+  assert.match(approved, /unlocked/)
+  assert.match(alreadyApprovedStatus("/tmp/plan.md", "abc"), /already approved/)
+
+  const rejected = rejectStatus({ planPath: "/tmp/plan.md", fromApproved: false, hasFeedback: true })
+  assert.match(rejected, /REJECTED/)
+  assert.match(rejected, /artifact only/)
+  const fromApproved = rejectStatus({ planPath: "/tmp/plan.md", fromApproved: true, hasFeedback: false })
+  assert.match(fromApproved, /locked again/)
+})
+
+test("approved implement prompt includes the file and optional notes", () => {
+  const markdown = sampleMarkdown()
+  const doc = parsePlan(markdown)
+  const hash = contentHash(markdown)
+  const prompt = approvedImplementPrompt({
+    planPath: "/tmp/plan.md",
+    doc,
+    hash,
+    notes: "Keep tests.",
+  })
+  assert.match(prompt, /Implement ONLY this approved plan/)
+  assert.match(prompt, /Keep tests/)
+  assert.match(prompt, /Wire API/)
+  assert.match(researchInstructions("/tmp/plan.md"), /\/plan-approve/)
+})
+
+test("revise prompt forbids project edits", () => {
+  const text = revisePrompt({ planPath: "/tmp/plan.md", feedback: "Split step 1." })
+  assert.match(text, /Stay in Plan mode/)
+  assert.match(text, /Do not edit the project/)
+  assert.match(text, /Split step 1/)
+})
+
+test("sourceOfTruthBlock distinguishes draft vs approved", () => {
+  const doc = parsePlan(sampleMarkdown())
+  const draft = sourceOfTruthBlock("/tmp/plan.md", doc)
+  const approved = sourceOfTruthBlock("/tmp/plan.md", doc, { approved: true })
+  assert.match(draft, /before approve/)
+  assert.match(approved, /This snapshot was approved/)
+})
+
+test("approvedContextNote warns when the file hash diverges", () => {
+  const markdown = sampleMarkdown()
+  const doc = parsePlan(markdown)
+  const hash = contentHash(markdown)
+  const ok = approvedContextNote("/tmp/plan.md", doc, hash)
+  assert.match(ok, /approved/)
+  assert.doesNotMatch(ok, /has changed/)
+  const stale = approvedContextNote("/tmp/plan.md", doc, "not-the-hash")
+  assert.match(stale, /has changed/)
+  assert.match(stale, /\/plan-approve/)
+})
