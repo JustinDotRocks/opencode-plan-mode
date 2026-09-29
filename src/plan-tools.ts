@@ -24,7 +24,7 @@ const stepSchema = {
   additionalProperties: false,
 } as const
 
-function asSteps(value: unknown): PlanStep[] | undefined {
+export function asSteps(value: unknown): PlanStep[] | undefined {
   if (!Array.isArray(value)) return undefined
   const steps: PlanStep[] = []
   for (const item of value) {
@@ -33,6 +33,8 @@ function asSteps(value: unknown): PlanStep[] | undefined {
     if (typeof record.text !== "string" || record.text.trim().length === 0) continue
     steps.push({ text: record.text.trim(), done: record.done === true })
   }
+  // Non-empty input but nothing valid → omit the patch so mergePlan keeps existing steps.
+  if (value.length > 0 && steps.length === 0) return undefined
   return steps
 }
 

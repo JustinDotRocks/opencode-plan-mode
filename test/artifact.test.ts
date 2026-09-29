@@ -88,6 +88,24 @@ test("identityHash ignores checklist progress but not step text", () => {
   assert.equal(setStepDone(open.steps, 2, true), undefined)
 })
 
+test("identityHash does not treat empty sections as skeleton placeholders", () => {
+  const empty = {
+    title: "",
+    goal: "",
+    research: "",
+    steps: [] as { text: string; done: boolean }[],
+    notes: "",
+  }
+  const placeholders = {
+    title: "Plan",
+    goal: "Describe the outcome.",
+    research: "Findings that justify the steps.",
+    steps: [] as { text: string; done: boolean }[],
+    notes: "Risks, out of scope, open questions.",
+  }
+  assert.notEqual(identityHash(empty), identityHash(placeholders))
+})
+
 test("deriveTodos and mergePlan keep user edits unless patched", () => {
   const existing = parsePlan(
     renderPlan({

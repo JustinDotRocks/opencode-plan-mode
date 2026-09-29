@@ -157,7 +157,14 @@ export function withOpenSteps(doc: Omit<PlanDocument, "markdown">): Omit<PlanDoc
 }
 
 export function identityHash(doc: Omit<PlanDocument, "markdown">): string {
-  return contentHash(renderPlan(withOpenSteps(doc)))
+  const canonical = {
+    title: doc.title.trim(),
+    goal: doc.goal.trim(),
+    research: doc.research.trim(),
+    steps: doc.steps.map((step) => step.text),
+    notes: doc.notes.trim(),
+  }
+  return contentHash(JSON.stringify(canonical))
 }
 
 export function identityHashFromMarkdown(markdown: string): string {

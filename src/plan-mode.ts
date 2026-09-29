@@ -172,7 +172,8 @@ export async function togglePlanMode(
   rawArgs: string | undefined,
 ): Promise<"entered" | "exited"> {
   const existing = await loadState(ctx.storage, sessionID)
-  if (isPlanning(existing) || parseExitIntent(rawArgs) === "discard") {
+  // Approved counts as "on": otherwise `/plan-mode` after `/plan-approve` re-enters planning.
+  if (hasPlanSession(existing) || parseExitIntent(rawArgs) === "discard") {
     await exitPlanMode(ctx, sessionID, rawArgs)
     return "exited"
   }
