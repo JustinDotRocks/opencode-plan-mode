@@ -1,14 +1,12 @@
 import { pathToFileURL } from "node:url"
 import type { Plugin } from "@opencode/plugin"
 import {
+  applyStepDoneToMarkdown,
   contentHash,
   identityHash,
-  mergePlan,
   parsePlan,
   readPlanFile,
-  renderPlan,
   remainingSteps,
-  setStepDone,
   type PlanDocument,
 } from "./artifact.ts"
 import { hashesMatch, unlockForBuild } from "./gate.ts"
@@ -67,14 +65,13 @@ export function applyApprovedProgress(input: {
       }),
     }
   }
-  const steps = setStepDone(doc.steps, index, done)
-  if (!steps) {
+  const markdown = applyStepDoneToMarkdown(doc.markdown, index, done)
+  if (!markdown) {
     return {
       ok: false,
       content: `No step ${index}. This plan has ${doc.steps.length} step${doc.steps.length === 1 ? "" : "s"}.`,
     }
   }
-  const markdown = renderPlan(mergePlan(doc, { steps }))
   const written = parsePlan(markdown)
   const updated = written.steps[index - 1]
   return {
@@ -83,7 +80,7 @@ export function applyApprovedProgress(input: {
     content: progressMessage({
       index,
       done,
-      text: updated?.text ?? steps[index - 1].text,
+      text: updated?.text ?? doc.steps[index - 1]?.text ?? "",
       doc: written,
     }),
   }

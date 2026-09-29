@@ -180,6 +180,33 @@ export function setStepDone(steps: readonly PlanStep[], index: number, done: boo
   return steps.map((step, i) => (i === index - 1 ? { text: step.text, done } : step))
 }
 
+/** Toggle one Steps checkbox in-place so Goal/Notes/extra markdown are not rewritten. */
+export function applyStepDoneToMarkdown(markdown: string, index: number, done: boolean): string | undefined {
+  if (!Number.isInteger(index) || index < 1) return undefined
+  const newline = markdown.includes("\r\n") ? "\r\n" : "\n"
+  const lines = markdown.replaceAll("\r\n", "\n").split("\n")
+  let current: string | undefined
+  let stepCount = 0
+  let found = false
+  const out = lines.map((line) => {
+    const heading = SECTION_HEADING.exec(line)
+    if (heading) {
+      current = heading[1].trim().toLowerCase()
+      return line
+    }
+    if (current !== "steps") return line
+    const match = STEP_LINE.exec(line)
+    if (!match) return line
+    if (!match[2].trim()) return line
+    stepCount += 1
+    if (stepCount !== index) return line
+    found = true
+    return line.replace(/\[([ xX])\]/, `[${done ? "x" : " "}]`)
+  })
+  if (!found) return undefined
+  return out.join(newline)
+}
+
 export async function readPlanFile(path: string): Promise<PlanDocument | undefined> {
   try {
     const markdown = await readFile(path, "utf8")

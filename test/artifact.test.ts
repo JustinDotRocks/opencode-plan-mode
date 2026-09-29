@@ -8,6 +8,7 @@ import {
   deriveTodos,
   ensurePlanFile,
   formatChecklist,
+  applyStepDoneToMarkdown,
   identityHash,
   mergePlan,
   parsePlan,
@@ -86,6 +87,39 @@ test("identityHash ignores checklist progress but not step text", () => {
   assert.deepEqual(remainingSteps(done), [])
   assert.deepEqual(setStepDone(open.steps, 1, true), [{ text: "Wire API", done: true }])
   assert.equal(setStepDone(open.steps, 2, true), undefined)
+})
+
+test("applyStepDoneToMarkdown only flips the matching checkbox", () => {
+  const markdown = [
+    "# Custom",
+    "",
+    "## Goal",
+    "",
+    "",
+    "## Research",
+    "",
+    "Notes only.",
+    "",
+    "## Steps",
+    "",
+    "* [ ] Wire API",
+    "  - [ ] Add tests",
+    "",
+    "## Notes",
+    "",
+    "",
+    "## Appendix",
+    "",
+    "Keep me.",
+    "",
+  ].join("\n")
+  const updated = applyStepDoneToMarkdown(markdown, 2, true)
+  assert.ok(updated)
+  assert.match(updated, /\* \[ \] Wire API/)
+  assert.match(updated, /  - \[x\] Add tests/)
+  assert.match(updated, /## Appendix\n\nKeep me\./)
+  assert.equal(parsePlan(updated).goal, "")
+  assert.equal(applyStepDoneToMarkdown(markdown, 9, true), undefined)
 })
 
 test("identityHash does not treat empty sections as skeleton placeholders", () => {

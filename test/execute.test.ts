@@ -74,6 +74,43 @@ test("applyApprovedProgress marks a step without changing identity", () => {
   assert.equal(parsed.steps[1]?.done, false)
 })
 
+test("applyApprovedProgress does not fill empty sections or drop extra markdown", () => {
+  const markdown = [
+    "# Ship search",
+    "",
+    "## Goal",
+    "",
+    "",
+    "## Research",
+    "",
+    "Index exists.",
+    "",
+    "## Steps",
+    "",
+    "- [ ] Wire API",
+    "- [ ] Add tests",
+    "",
+    "## Notes",
+    "",
+    "",
+    "## Appendix",
+    "",
+    "Keep this section.",
+    "",
+  ].join("\n")
+  const doc = parsePlan(markdown)
+  const state = approvedState({ approvedHash: identityHash(doc) })
+  const result = applyApprovedProgress({ state, doc, index: 1, done: true })
+  assert.equal(result.ok, true)
+  if (!result.ok) return
+  assert.equal(isIdentityDrifted(state.approvedHash, result.markdown), false)
+  assert.match(result.markdown, /## Appendix\n\nKeep this section\./)
+  const parsed = parsePlan(result.markdown)
+  assert.equal(parsed.goal, "")
+  assert.equal(parsed.notes, "")
+  assert.equal(parsed.steps[0]?.done, true)
+})
+
 test("applyApprovedProgress refuses planning, drift, and bad indexes", () => {
   const doc = sampleDoc()
   const planning: SessionPlanState = { ...approvedState(), phase: "planning", approvedHash: undefined }
