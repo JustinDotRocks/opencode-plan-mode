@@ -156,19 +156,31 @@ export function withOpenSteps(doc: Omit<PlanDocument, "markdown">): Omit<PlanDoc
   }
 }
 
-export function identityHash(doc: Omit<PlanDocument, "markdown">): string {
-  const canonical = {
-    title: doc.title.trim(),
-    goal: doc.goal.trim(),
-    research: doc.research.trim(),
-    steps: doc.steps.map((step) => step.text),
-    notes: doc.notes.trim(),
-  }
-  return contentHash(JSON.stringify(canonical))
+/** Full-file identity: extra sections/preface count; only Steps checkboxes are opened. */
+export function normalizeIdentityMarkdown(markdown: string): string {
+  const newline = markdown.includes("\r\n") ? "\r\n" : "\n"
+  const lines = markdown.replaceAll("\r\n", "\n").split("\n")
+  let current: string | undefined
+  const out = lines.map((line) => {
+    const heading = SECTION_HEADING.exec(line)
+    if (heading) {
+      current = heading[1].trim().toLowerCase()
+      return line
+    }
+    if (current !== "steps") return line
+    const match = STEP_LINE.exec(line)
+    if (!match) return line
+    return line.replace(/\[([ xX])\]/, "[ ]")
+  })
+  return out.join(newline)
+}
+
+export function identityHash(doc: Pick<PlanDocument, "markdown">): string {
+  return identityHashFromMarkdown(doc.markdown)
 }
 
 export function identityHashFromMarkdown(markdown: string): string {
-  return identityHash(parsePlan(markdown))
+  return contentHash(normalizeIdentityMarkdown(markdown))
 }
 
 export function remainingSteps(doc: Pick<PlanDocument, "steps">): PlanStep[] {

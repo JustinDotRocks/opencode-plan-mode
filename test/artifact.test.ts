@@ -10,6 +10,7 @@ import {
   formatChecklist,
   applyStepDoneToMarkdown,
   identityHash,
+  identityHashFromMarkdown,
   mergePlan,
   parsePlan,
   remainingSteps,
@@ -123,21 +124,50 @@ test("applyStepDoneToMarkdown only flips the matching checkbox", () => {
 })
 
 test("identityHash does not treat empty sections as skeleton placeholders", () => {
-  const empty = {
-    title: "",
-    goal: "",
-    research: "",
-    steps: [] as { text: string; done: boolean }[],
-    notes: "",
-  }
-  const placeholders = {
-    title: "Plan",
-    goal: "Describe the outcome.",
-    research: "Findings that justify the steps.",
-    steps: [] as { text: string; done: boolean }[],
-    notes: "Risks, out of scope, open questions.",
-  }
+  const empty = parsePlan(
+    ["# ", "", "## Goal", "", "", "## Research", "", "", "## Steps", "", "", "## Notes", "", ""].join("\n"),
+  )
+  const placeholders = parsePlan(
+    renderPlan({
+      title: "Plan",
+      goal: "Describe the outcome.",
+      research: "Findings that justify the steps.",
+      steps: [],
+      notes: "Risks, out of scope, open questions.",
+    }),
+  )
   assert.notEqual(identityHash(empty), identityHash(placeholders))
+})
+
+test("identityHash includes preface and unknown sections", () => {
+  const base = [
+    "# Ship search",
+    "",
+    "## Goal",
+    "",
+    "Add search.",
+    "",
+    "## Research",
+    "",
+    "Index exists.",
+    "",
+    "## Steps",
+    "",
+    "- [ ] Wire API",
+    "",
+    "## Notes",
+    "",
+    "No UI yet.",
+    "",
+  ].join("\n")
+  const withAppendix = `${base}## Appendix\n\nDo this extra work.\n`
+  const withPreface = `<!-- secret -->\n${base}`
+  assert.notEqual(identityHashFromMarkdown(base), identityHashFromMarkdown(withAppendix))
+  assert.notEqual(identityHashFromMarkdown(base), identityHashFromMarkdown(withPreface))
+  assert.equal(
+    identityHashFromMarkdown(base),
+    identityHashFromMarkdown(base.replace("- [ ] Wire API", "- [x] Wire API")),
+  )
 })
 
 test("deriveTodos and mergePlan keep user edits unless patched", () => {

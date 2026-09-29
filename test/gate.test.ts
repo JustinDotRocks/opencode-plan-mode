@@ -169,6 +169,7 @@ test("hashesMatch compares identity SHA-256 and ignores checkbox progress", () =
     notes: "No UI yet.",
   })
   assert.equal(hashesMatch(hash, drifted), false)
+  assert.equal(hashesMatch(hash, `${markdown}## Appendix\n\nInjected.\n`), false)
   assert.equal(hashesMatch("deadbeef", markdown), false)
   assert.equal(hashesMatch(undefined, markdown), false)
   assert.equal(contentHash(markdown).length, 64)
