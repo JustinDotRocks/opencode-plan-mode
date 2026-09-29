@@ -10,7 +10,7 @@ import {
   shouldDenyPlanningEdit,
   toolInputPaths,
 } from "./permissions.ts"
-import { hasPlanSession, isApproved, isPlanning, loadState, saveState } from "./state.ts"
+import { hasPlanSession, isApproved, isPlanning, loadState, patchContentHash, resetLiveState } from "./state.ts"
 import { approvedInstructions, researchInstructions } from "./status.ts"
 
 export default Plugin.define({
@@ -97,15 +97,14 @@ export default Plugin.define({
     })
 
     await ctx.session.hook("context", async (event) => {
+      const initial = await loadState(ctx.storage, event.sessionID)
+      if (!hasPlanSession(initial) || !initial) return
+      const doc = await readPlanFile(initial.planPath)
+      if (doc) {
+        await patchContentHash(ctx.storage, event.sessionID, contentHash(doc.markdown))
+      }
       const state = await loadState(ctx.storage, event.sessionID)
       if (!hasPlanSession(state) || !state) return
-      const doc = await readPlanFile(state.planPath)
-      if (doc) {
-        const hash = contentHash(doc.markdown)
-        if (state.contentHash !== hash) {
-          await saveState(ctx.storage, { ...state, contentHash: hash })
-        }
-      }
 
       if (isPlanning(state)) {
         event.system.push({
@@ -200,5 +199,9 @@ export default Plugin.define({
         }
       }
     })
+
+    return () => {
+      resetLiveState()
+    }
   },
 })

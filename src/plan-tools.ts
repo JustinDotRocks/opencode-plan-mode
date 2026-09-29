@@ -10,7 +10,7 @@ import {
 } from "./artifact.ts"
 import { applyApprovedProgress } from "./execute.ts"
 import { planArtifactPath } from "./permissions.ts"
-import { isApproved, isPlanning, loadState, saveState } from "./state.ts"
+import { isApproved, isPlanning, loadState, patchContentHash } from "./state.ts"
 
 type Ctx = Plugin.Context
 
@@ -44,11 +44,7 @@ async function planPathFor(ctx: Ctx, sessionID: string): Promise<string> {
 }
 
 async function rememberHash(ctx: Ctx, sessionID: string, markdown: string): Promise<void> {
-  const state = await loadState(ctx.storage, sessionID)
-  if (!state) return
-  const hash = contentHash(markdown)
-  if (state.contentHash === hash) return
-  await saveState(ctx.storage, { ...state, contentHash: hash })
+  await patchContentHash(ctx.storage, sessionID, contentHash(markdown))
 }
 
 export async function registerPlanTools(ctx: Ctx): Promise<void> {

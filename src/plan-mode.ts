@@ -8,6 +8,7 @@ import {
   isApproved,
   isPlanning,
   loadState,
+  patchContentHash,
   saveState,
   type SessionPlanState,
 } from "./state.ts"
@@ -110,10 +111,7 @@ export async function showPlanArtifact(ctx: Ctx, sessionID: string): Promise<voi
     return
   }
   if (existing) {
-    const hash = contentHash(doc.markdown)
-    if (existing.contentHash !== hash) {
-      await saveState(ctx.storage, { ...existing, contentHash: hash })
-    }
+    await patchContentHash(ctx.storage, sessionID, contentHash(doc.markdown))
   }
   await ctx.session.synthetic({ sessionID, text: showPlanMessage(planPath, doc) })
 }
