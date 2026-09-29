@@ -4,5 +4,14 @@
   "private": true,
   "description": "OpenCode plugin providing Cursor-like plan mode",
   "type": "module",
-  "license": "MIT"
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "src"
+  ],
+  "dependencies": {
+    "@opencode/plugin": "2.0.18"
+  }
 }
