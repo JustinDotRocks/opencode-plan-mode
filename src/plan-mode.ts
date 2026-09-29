@@ -8,10 +8,12 @@ import {
   isApproved,
   isPlanning,
   loadState,
+  patchContentHash,
   saveState,
   type SessionPlanState,
 } from "./state.ts"
 import {
+  alreadyApprovedStatus,
   alreadyOnStatus,
   enterStatus,
   exitStatus,
@@ -47,9 +49,76 @@ export async function applyPlanningSession(
   })
 }
 
+export type EnterPlanDecision = {
+  state: SessionPlanState
+  alreadyOn: boolean
+  applyPlanning: boolean
+  status: string
+}
+
+export function nextEnterPlanState(input: {
+  existing: SessionPlanState | undefined
+  sessionID: string
+  sessionAgent?: string
+  sessionTitle?: string
+  planPath: string
+  contentHash: string
+  resumed: boolean
+  created: boolean
+}): EnterPlanDecision {
+  const { existing, sessionID, sessionAgent, sessionTitle, planPath, resumed, created } = input
+  const hash = input.contentHash
+
+  if (isApproved(existing) && existing) {
+    return {
+      state: { ...existing, planPath, contentHash: hash },
+      alreadyOn: true,
+      applyPlanning: false,
+      status: alreadyApprovedStatus(planPath, existing.approvedHash ?? hash),
+    }
+  }
+
+  if (isPlanning(existing) && existing) {
+    return {
+      state: {
+        ...existing,
+        planPath,
+        phase: "planning",
+        contentHash: hash,
+        approvedHash: undefined,
+      },
+      alreadyOn: true,
+      applyPlanning: true,
+      status: alreadyOnStatus(planPath),
+    }
+  }
+
+  const previousAgent =
+    existing?.previousAgent ?? (sessionAgent && sessionAgent !== "plan" ? sessionAgent : "build")
+  const previousTitle = sessionTitle?.startsWith(PLAN_TITLE_PREFIX)
+    ? (existing?.previousTitle ?? withoutPlanTitle(sessionTitle))
+    : (existing?.previousTitle ?? sessionTitle)
+
+  return {
+    state: {
+      phase: "planning",
+      sessionID,
+      previousAgent,
+      previousTitle,
+      planPath,
+      contentHash: hash,
+      approvedHash: undefined,
+    },
+    alreadyOn: false,
+    applyPlanning: true,
+    status: enterStatus({ planPath, resumed, created }),
+  }
+}
+
 export async function enterPlanMode(
   ctx: Ctx,
   sessionID: string,
+  options?: { announce?: boolean },
 ): Promise<{ state: SessionPlanState; alreadyOn: boolean; resumed: boolean }> {
   const session = await ctx.session.get({ sessionID })
   const existing = await loadState(ctx.storage, sessionID)
@@ -57,45 +126,25 @@ export async function enterPlanMode(
   const ensured = await ensurePlanFile(planPath)
   const hash = contentHash(ensured.markdown)
   const resumed = !ensured.created
-
-  if (isPlanning(existing)) {
-    const state: SessionPlanState = {
-      ...existing,
-      planPath,
-      phase: "planning",
-      contentHash: hash,
-      approvedHash: undefined,
-    }
-    await applyPlanningSession(ctx, sessionID, session.title)
-    await saveState(ctx.storage, state)
-    await ctx.session.synthetic({ sessionID, text: alreadyOnStatus(planPath) })
-    return { state, alreadyOn: true, resumed }
-  }
-
-  const previousAgent =
-    existing?.previousAgent ??
-    (session.agent && session.agent !== "plan" ? session.agent : "build")
-  const previousTitle = session.title?.startsWith(PLAN_TITLE_PREFIX)
-    ? (existing?.previousTitle ?? withoutPlanTitle(session.title))
-    : (existing?.previousTitle ?? session.title)
-
-  const state: SessionPlanState = {
-    phase: "planning",
+  const decision = nextEnterPlanState({
+    existing,
     sessionID,
-    previousAgent,
-    previousTitle,
+    sessionAgent: session.agent,
+    sessionTitle: session.title,
     planPath,
     contentHash: hash,
-    approvedHash: undefined,
-  }
-
-  await applyPlanningSession(ctx, sessionID, session.title)
-  await saveState(ctx.storage, state)
-  await ctx.session.synthetic({
-    sessionID,
-    text: enterStatus({ planPath, resumed, created: ensured.created }),
+    resumed,
+    created: ensured.created,
   })
-  return { state, alreadyOn: false, resumed }
+
+  if (decision.applyPlanning) {
+    await applyPlanningSession(ctx, sessionID, session.title)
+  }
+  await saveState(ctx.storage, decision.state)
+  if (options?.announce !== false) {
+    await ctx.session.synthetic({ sessionID, text: decision.status })
+  }
+  return { state: decision.state, alreadyOn: decision.alreadyOn, resumed }
 }
 
 export async function showPlanArtifact(ctx: Ctx, sessionID: string): Promise<void> {
@@ -110,10 +159,7 @@ export async function showPlanArtifact(ctx: Ctx, sessionID: string): Promise<voi
     return
   }
   if (existing) {
-    const hash = contentHash(doc.markdown)
-    if (existing.contentHash !== hash) {
-      await saveState(ctx.storage, { ...existing, contentHash: hash })
-    }
+    await patchContentHash(ctx.storage, sessionID, contentHash(doc.markdown))
   }
   await ctx.session.synthetic({ sessionID, text: showPlanMessage(planPath, doc) })
 }
@@ -153,6 +199,8 @@ export async function exitPlanMode(
     })
   }
 
+  const wasApproved = isApproved(existing)
+
   if (intent === "discard") {
     await discardDraft(planPath)
     await clearState(ctx.storage, sessionID)
@@ -162,7 +210,7 @@ export async function exitPlanMode(
 
   await ctx.session.synthetic({
     sessionID,
-    text: exitStatus({ intent, planPath }),
+    text: exitStatus({ intent, planPath, wasApproved }),
   })
 }
 
@@ -172,7 +220,8 @@ export async function togglePlanMode(
   rawArgs: string | undefined,
 ): Promise<"entered" | "exited"> {
   const existing = await loadState(ctx.storage, sessionID)
-  if (isPlanning(existing) || parseExitIntent(rawArgs) === "discard") {
+  // Approved counts as "on": otherwise `/plan-mode` after `/plan-approve` re-enters planning.
+  if (hasPlanSession(existing) || parseExitIntent(rawArgs) === "discard") {
     await exitPlanMode(ctx, sessionID, rawArgs)
     return "exited"
   }

@@ -7,7 +7,13 @@ import {
   isApproved,
   isPlanning,
   hasPlanSession,
+  liveCacheSize,
+  loadState,
+  patchContentHash,
+  resetLiveState,
+  saveState,
   type SessionPlanState,
+  type StorageLike,
 } from "../src/state.ts"
 import {
   alreadyApprovedStatus,
@@ -61,6 +67,80 @@ test("parseSessionState rejects unknown phases", () => {
   assert.equal(parseSessionState("ses_test", { phase: "planning" }), undefined)
 })
 
+test("patchContentHash does not revert an approved phase", async () => {
+  resetLiveState()
+  const store = new Map<string, unknown>()
+  const storage: StorageLike = {
+    async get(key) {
+      return store.get(key)
+    },
+    async set(key, value) {
+      store.set(key, value)
+    },
+    async remove(key) {
+      store.delete(key)
+    },
+  }
+  const sessionID = "ses_race"
+  await saveState(storage, {
+    phase: "planning",
+    sessionID,
+    previousAgent: "build",
+    planPath: "/tmp/plan.md",
+    contentHash: "old",
+  })
+  await saveState(storage, {
+    phase: "approved",
+    sessionID,
+    previousAgent: "build",
+    planPath: "/tmp/plan.md",
+    contentHash: "old",
+    approvedHash: "id",
+  })
+  const patched = await patchContentHash(storage, sessionID, "new")
+  assert.equal(patched?.phase, "approved")
+  assert.equal(patched?.approvedHash, "id")
+  assert.equal(patched?.contentHash, "new")
+  const loaded = await loadState(storage, sessionID)
+  assert.equal(loaded?.phase, "approved")
+  resetLiveState()
+})
+
+test("idle saves are not kept in the live cache", async () => {
+  resetLiveState()
+  const store = new Map<string, unknown>()
+  const storage: StorageLike = {
+    async get(key) {
+      return store.get(key)
+    },
+    async set(key, value) {
+      store.set(key, value)
+    },
+    async remove(key) {
+      store.delete(key)
+    },
+  }
+  const sessionID = "ses_idle"
+  await saveState(storage, {
+    phase: "planning",
+    sessionID,
+    previousAgent: "build",
+    planPath: "/tmp/plan.md",
+  })
+  assert.equal(liveCacheSize(), 1)
+  await saveState(storage, {
+    phase: "idle",
+    sessionID,
+    previousAgent: "build",
+    planPath: "/tmp/plan.md",
+  })
+  assert.equal(liveCacheSize(), 0)
+  const loaded = await loadState(storage, sessionID)
+  assert.equal(loaded?.phase, "idle")
+  assert.equal(liveCacheSize(), 0)
+  resetLiveState()
+})
+
 test("gateIdleReason blocks idle and missing state", () => {
   assert.equal(gateIdleReason(undefined), gateIdleStatus())
   assert.equal(gateIdleReason(planningState({ phase: "idle" })), gateIdleStatus())
@@ -89,6 +169,7 @@ test("hashesMatch compares identity SHA-256 and ignores checkbox progress", () =
     notes: "No UI yet.",
   })
   assert.equal(hashesMatch(hash, drifted), false)
+  assert.equal(hashesMatch(hash, `${markdown}## Appendix\n\nInjected.\n`), false)
   assert.equal(hashesMatch("deadbeef", markdown), false)
   assert.equal(hashesMatch(undefined, markdown), false)
   assert.equal(contentHash(markdown).length, 64)

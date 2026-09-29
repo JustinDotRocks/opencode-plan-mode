@@ -1,5 +1,5 @@
 import { homedir } from "node:os"
-import { join } from "node:path"
+import { join, resolve } from "node:path"
 
 export type PermissionRule = {
   action: string
@@ -38,11 +38,24 @@ export function researchOnlyRules(): PermissionRule[] {
   ]
 }
 
-export function isPlanArtifactPath(filePath: string, sessionID: string): boolean {
-  const normalized = toPosix(filePath)
-  const dir = planDirPosix()
-  const artifact = toPosix(planArtifactPath(sessionID))
-  if (normalized === artifact || normalized === dir) return true
+/** Expand a leading `~` so tilde paths resolve against the home directory. */
+export function expandUserPath(filePath: string): string {
+  if (filePath === "~") return homedir()
+  if (filePath.startsWith("~/") || filePath.startsWith("~\\")) {
+    return join(homedir(), filePath.slice(2))
+  }
+  return filePath
+}
+
+/**
+ * True when `filePath` is the plan directory or a file inside it, after
+ * resolving `.` / `..` (and `~`). A string prefix check is not enough:
+ * `~/.opencode/plan/../../../.ssh/id_rsa` must not count as in-bounds.
+ */
+export function isPlanArtifactPath(filePath: string, _sessionID: string): boolean {
+  const normalized = toPosix(resolve(expandUserPath(filePath)))
+  const dir = toPosix(resolve(planDir()))
+  if (normalized === dir) return true
   if (normalized.startsWith(`${dir}/`)) return true
   return false
 }

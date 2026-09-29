@@ -131,6 +131,81 @@ export function mergePlan(existing: PlanDocument | undefined, patch: PlanPatch):
   }
 }
 
+const CANONICAL_SECTION_ORDER = ["goal", "research", "steps", "notes"] as const
+const CANONICAL_SECTION_TITLE: Record<(typeof CANONICAL_SECTION_ORDER)[number], string> = {
+  goal: "Goal",
+  research: "Research",
+  steps: "Steps",
+  notes: "Notes",
+}
+
+function sectionBodyLines(text: string): string[] {
+  return ["", ...text.replaceAll("\r\n", "\n").split("\n"), ""]
+}
+
+function findSectionHeadings(lines: readonly string[]): { name: string; headingIndex: number; bodyEnd: number }[] {
+  const starts: { name: string; headingIndex: number }[] = []
+  for (let i = 0; i < lines.length; i++) {
+    const heading = SECTION_HEADING.exec(lines[i]!)
+    if (!heading) continue
+    starts.push({ name: heading[1].trim().toLowerCase(), headingIndex: i })
+  }
+  return starts.map((start, i) => ({
+    ...start,
+    bodyEnd: starts[i + 1]?.headingIndex ?? lines.length,
+  }))
+}
+
+function applyTitleToLines(lines: string[], title: string): string[] {
+  for (let i = 0; i < lines.length; i++) {
+    if (SECTION_HEADING.test(lines[i]!)) break
+    if (TITLE_HEADING.test(lines[i]!)) {
+      const next = lines.slice()
+      next[i] = `# ${title}`
+      return next
+    }
+  }
+  const firstSection = lines.findIndex((line) => SECTION_HEADING.test(line))
+  const at = firstSection === -1 ? 0 : firstSection
+  return [...lines.slice(0, at), `# ${title}`, "", ...lines.slice(at)]
+}
+
+function upsertCanonicalSection(lines: string[], name: (typeof CANONICAL_SECTION_ORDER)[number], body: string[]): string[] {
+  const headings = findSectionHeadings(lines)
+  const found = headings.find((heading) => heading.name === name)
+  if (found) {
+    return [...lines.slice(0, found.headingIndex + 1), ...body, ...lines.slice(found.bodyEnd)]
+  }
+  const rank = CANONICAL_SECTION_ORDER.indexOf(name)
+  let at = headings[0]?.headingIndex ?? lines.length
+  for (const heading of headings) {
+    const other = CANONICAL_SECTION_ORDER.indexOf(heading.name as (typeof CANONICAL_SECTION_ORDER)[number])
+    if (other !== -1 && other < rank) at = heading.bodyEnd
+  }
+  return [...lines.slice(0, at), `## ${CANONICAL_SECTION_TITLE[name]}`, ...body, ...lines.slice(at)]
+}
+
+/** Patch canonical fields in-place so preface and extra headings are not dropped. */
+export function applyPlanPatchToMarkdown(markdown: string, patch: PlanPatch): string {
+  const newline = markdown.includes("\r\n") ? "\r\n" : "\n"
+  let lines = markdown.replaceAll("\r\n", "\n").split("\n")
+  const title = patch.title?.trim()
+  if (title) lines = applyTitleToLines(lines, title)
+  if (patch.goal !== undefined) lines = upsertCanonicalSection(lines, "goal", sectionBodyLines(patch.goal))
+  if (patch.research !== undefined) {
+    lines = upsertCanonicalSection(lines, "research", sectionBodyLines(patch.research))
+  }
+  if (patch.steps !== undefined) {
+    const checklist =
+      patch.steps.length > 0
+        ? patch.steps.map((step) => `- [${step.done ? "x" : " "}] ${step.text}`).join("\n")
+        : ""
+    lines = upsertCanonicalSection(lines, "steps", sectionBodyLines(checklist))
+  }
+  if (patch.notes !== undefined) lines = upsertCanonicalSection(lines, "notes", sectionBodyLines(patch.notes))
+  return lines.join(newline)
+}
+
 export function deriveTodos(doc: Pick<PlanDocument, "steps">): string[] {
   return doc.steps.map((step) => `- [${step.done ? "x" : " "}] ${step.text}`)
 }
@@ -156,12 +231,31 @@ export function withOpenSteps(doc: Omit<PlanDocument, "markdown">): Omit<PlanDoc
   }
 }
 
-export function identityHash(doc: Omit<PlanDocument, "markdown">): string {
-  return contentHash(renderPlan(withOpenSteps(doc)))
+/** Full-file identity: extra sections/preface count; only Steps checkboxes are opened. */
+export function normalizeIdentityMarkdown(markdown: string): string {
+  const newline = markdown.includes("\r\n") ? "\r\n" : "\n"
+  const lines = markdown.replaceAll("\r\n", "\n").split("\n")
+  let current: string | undefined
+  const out = lines.map((line) => {
+    const heading = SECTION_HEADING.exec(line)
+    if (heading) {
+      current = heading[1].trim().toLowerCase()
+      return line
+    }
+    if (current !== "steps") return line
+    const match = STEP_LINE.exec(line)
+    if (!match) return line
+    return line.replace(/\[([ xX])\]/, "[ ]")
+  })
+  return out.join(newline)
+}
+
+export function identityHash(doc: Pick<PlanDocument, "markdown">): string {
+  return identityHashFromMarkdown(doc.markdown)
 }
 
 export function identityHashFromMarkdown(markdown: string): string {
-  return identityHash(parsePlan(markdown))
+  return contentHash(normalizeIdentityMarkdown(markdown))
 }
 
 export function remainingSteps(doc: Pick<PlanDocument, "steps">): PlanStep[] {
@@ -171,6 +265,33 @@ export function remainingSteps(doc: Pick<PlanDocument, "steps">): PlanStep[] {
 export function setStepDone(steps: readonly PlanStep[], index: number, done: boolean): PlanStep[] | undefined {
   if (!Number.isInteger(index) || index < 1 || index > steps.length) return undefined
   return steps.map((step, i) => (i === index - 1 ? { text: step.text, done } : step))
+}
+
+/** Toggle one Steps checkbox in-place so Goal/Notes/extra markdown are not rewritten. */
+export function applyStepDoneToMarkdown(markdown: string, index: number, done: boolean): string | undefined {
+  if (!Number.isInteger(index) || index < 1) return undefined
+  const newline = markdown.includes("\r\n") ? "\r\n" : "\n"
+  const lines = markdown.replaceAll("\r\n", "\n").split("\n")
+  let current: string | undefined
+  let stepCount = 0
+  let found = false
+  const out = lines.map((line) => {
+    const heading = SECTION_HEADING.exec(line)
+    if (heading) {
+      current = heading[1].trim().toLowerCase()
+      return line
+    }
+    if (current !== "steps") return line
+    const match = STEP_LINE.exec(line)
+    if (!match) return line
+    if (!match[2].trim()) return line
+    stepCount += 1
+    if (stepCount !== index) return line
+    found = true
+    return line.replace(/\[([ xX])\]/, `[${done ? "x" : " "}]`)
+  })
+  if (!found) return undefined
+  return out.join(newline)
 }
 
 export async function readPlanFile(path: string): Promise<PlanDocument | undefined> {

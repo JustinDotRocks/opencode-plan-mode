@@ -60,15 +60,27 @@ export function alreadyOnStatus(planPath: string): string {
   ].join("\n")
 }
 
-export function exitStatus(input: { intent: ExitIntent; planPath: string }): string {
+export function exitStatus(input: {
+  intent: ExitIntent
+  planPath: string
+  wasApproved?: boolean
+}): string {
   if (input.intent === "discard") {
-    return "Plan mode OFF. Draft discarded. Nothing was approved or executed."
+    return input.wasApproved
+      ? "Plan mode OFF. Draft discarded. Prior approval cleared; nothing further will run against it."
+      : "Plan mode OFF. Draft discarded. Nothing was approved or executed."
   }
-  return [
-    "Plan mode OFF. Draft kept (not approved or executed).",
-    `Draft: ${input.planPath}`,
-    "Re-enter with /plan to continue, or /plan-exit discard to delete it.",
-  ].join("\n")
+  return input.wasApproved
+    ? [
+        "Plan mode OFF. Draft kept; approval binding cleared.",
+        `Draft: ${input.planPath}`,
+        "Re-enter with /plan, then /plan-approve again to re-bind execution.",
+      ].join("\n")
+    : [
+        "Plan mode OFF. Draft kept (not approved or executed).",
+        `Draft: ${input.planPath}`,
+        "Re-enter with /plan to continue, or /plan-exit discard to delete it.",
+      ].join("\n")
 }
 
 export function idleStatus(): string {

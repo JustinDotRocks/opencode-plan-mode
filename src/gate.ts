@@ -16,7 +16,7 @@ import {
 
 type Ctx = Plugin.Context
 
-/** True when Goal/Research/step text/Notes match. Checklist progress is ignored. */
+/** True when the artifact matches the approved identity. Checklist progress is ignored. */
 export function hashesMatch(approvedHash: string | undefined, markdown: string): boolean {
   return approvedHash !== undefined && approvedHash === identityHashFromMarkdown(markdown)
 }

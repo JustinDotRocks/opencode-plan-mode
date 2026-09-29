@@ -8,7 +8,10 @@ import {
   deriveTodos,
   ensurePlanFile,
   formatChecklist,
+  applyPlanPatchToMarkdown,
+  applyStepDoneToMarkdown,
   identityHash,
+  identityHashFromMarkdown,
   mergePlan,
   parsePlan,
   remainingSteps,
@@ -86,6 +89,126 @@ test("identityHash ignores checklist progress but not step text", () => {
   assert.deepEqual(remainingSteps(done), [])
   assert.deepEqual(setStepDone(open.steps, 1, true), [{ text: "Wire API", done: true }])
   assert.equal(setStepDone(open.steps, 2, true), undefined)
+})
+
+test("applyStepDoneToMarkdown only flips the matching checkbox", () => {
+  const markdown = [
+    "# Custom",
+    "",
+    "## Goal",
+    "",
+    "",
+    "## Research",
+    "",
+    "Notes only.",
+    "",
+    "## Steps",
+    "",
+    "* [ ] Wire API",
+    "  - [ ] Add tests",
+    "",
+    "## Notes",
+    "",
+    "",
+    "## Appendix",
+    "",
+    "Keep me.",
+    "",
+  ].join("\n")
+  const updated = applyStepDoneToMarkdown(markdown, 2, true)
+  assert.ok(updated)
+  assert.match(updated, /\* \[ \] Wire API/)
+  assert.match(updated, /  - \[x\] Add tests/)
+  assert.match(updated, /## Appendix\n\nKeep me\./)
+  assert.equal(parsePlan(updated).goal, "")
+  assert.equal(applyStepDoneToMarkdown(markdown, 9, true), undefined)
+})
+
+test("applyPlanPatchToMarkdown keeps extra sections and preface", () => {
+  const markdown = [
+    "<!-- keep -->",
+    "# Custom",
+    "",
+    "## Goal",
+    "",
+    "Old goal.",
+    "",
+    "## Research",
+    "",
+    "Keep research.",
+    "",
+    "## Steps",
+    "",
+    "- [ ] Wire API",
+    "",
+    "## Notes",
+    "",
+    "",
+    "## Appendix",
+    "",
+    "Keep me.",
+    "",
+  ].join("\n")
+  const updated = applyPlanPatchToMarkdown(markdown, { goal: "New goal." })
+  assert.match(updated, /<!-- keep -->/)
+  assert.match(updated, /# Custom/)
+  assert.match(updated, /New goal\./)
+  assert.match(updated, /Keep research\./)
+  assert.match(updated, /## Appendix\n\nKeep me\./)
+  const withResearch = applyPlanPatchToMarkdown(
+    ["# Custom", "", "## Goal", "", "G", "", "## Appendix", "", "Keep me.", ""].join("\n"),
+    { research: "Inserted." },
+  )
+  assert.match(withResearch, /## Research\n\nInserted\./)
+  assert.match(withResearch, /## Appendix\n\nKeep me\./)
+  assert.ok(withResearch.indexOf("## Research") < withResearch.indexOf("## Appendix"))
+})
+
+test("identityHash does not treat empty sections as skeleton placeholders", () => {
+  const empty = parsePlan(
+    ["# ", "", "## Goal", "", "", "## Research", "", "", "## Steps", "", "", "## Notes", "", ""].join("\n"),
+  )
+  const placeholders = parsePlan(
+    renderPlan({
+      title: "Plan",
+      goal: "Describe the outcome.",
+      research: "Findings that justify the steps.",
+      steps: [],
+      notes: "Risks, out of scope, open questions.",
+    }),
+  )
+  assert.notEqual(identityHash(empty), identityHash(placeholders))
+})
+
+test("identityHash includes preface and unknown sections", () => {
+  const base = [
+    "# Ship search",
+    "",
+    "## Goal",
+    "",
+    "Add search.",
+    "",
+    "## Research",
+    "",
+    "Index exists.",
+    "",
+    "## Steps",
+    "",
+    "- [ ] Wire API",
+    "",
+    "## Notes",
+    "",
+    "No UI yet.",
+    "",
+  ].join("\n")
+  const withAppendix = `${base}## Appendix\n\nDo this extra work.\n`
+  const withPreface = `<!-- secret -->\n${base}`
+  assert.notEqual(identityHashFromMarkdown(base), identityHashFromMarkdown(withAppendix))
+  assert.notEqual(identityHashFromMarkdown(base), identityHashFromMarkdown(withPreface))
+  assert.equal(
+    identityHashFromMarkdown(base),
+    identityHashFromMarkdown(base.replace("- [ ] Wire API", "- [x] Wire API")),
+  )
 })
 
 test("deriveTodos and mergePlan keep user edits unless patched", () => {

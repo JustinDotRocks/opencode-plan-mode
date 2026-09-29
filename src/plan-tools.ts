@@ -1,16 +1,18 @@
 import type { Plugin } from "@opencode/plugin"
 import {
+  applyPlanPatchToMarkdown,
   contentHash,
   mergePlan,
   parsePlan,
   readPlanFile,
   renderPlan,
   writePlanFile,
+  type PlanPatch,
   type PlanStep,
 } from "./artifact.ts"
 import { applyApprovedProgress } from "./execute.ts"
 import { planArtifactPath } from "./permissions.ts"
-import { isApproved, isPlanning, loadState, saveState } from "./state.ts"
+import { isApproved, isPlanning, loadState, patchContentHash } from "./state.ts"
 
 type Ctx = Plugin.Context
 
@@ -24,7 +26,7 @@ const stepSchema = {
   additionalProperties: false,
 } as const
 
-function asSteps(value: unknown): PlanStep[] | undefined {
+export function asSteps(value: unknown): PlanStep[] | undefined {
   if (!Array.isArray(value)) return undefined
   const steps: PlanStep[] = []
   for (const item of value) {
@@ -33,6 +35,8 @@ function asSteps(value: unknown): PlanStep[] | undefined {
     if (typeof record.text !== "string" || record.text.trim().length === 0) continue
     steps.push({ text: record.text.trim(), done: record.done === true })
   }
+  // Non-empty input but nothing valid → omit the patch so mergePlan keeps existing steps.
+  if (value.length > 0 && steps.length === 0) return undefined
   return steps
 }
 
@@ -42,11 +46,7 @@ async function planPathFor(ctx: Ctx, sessionID: string): Promise<string> {
 }
 
 async function rememberHash(ctx: Ctx, sessionID: string, markdown: string): Promise<void> {
-  const state = await loadState(ctx.storage, sessionID)
-  if (!state) return
-  const hash = contentHash(markdown)
-  if (state.contentHash === hash) return
-  await saveState(ctx.storage, { ...state, contentHash: hash })
+  await patchContentHash(ctx.storage, sessionID, contentHash(markdown))
 }
 
 export async function registerPlanTools(ctx: Ctx): Promise<void> {
@@ -124,14 +124,16 @@ export async function registerPlanTools(ctx: Ctx): Promise<void> {
         const path = state.planPath
         const existing = await readPlanFile(path)
         const record = (input ?? {}) as Record<string, unknown>
-        const merged = mergePlan(existing, {
+        const patch: PlanPatch = {
           title: typeof record.title === "string" ? record.title : undefined,
           goal: typeof record.goal === "string" ? record.goal : undefined,
           research: typeof record.research === "string" ? record.research : undefined,
           steps: asSteps(record.steps),
           notes: typeof record.notes === "string" ? record.notes : undefined,
-        })
-        const markdown = renderPlan(merged)
+        }
+        const markdown = existing
+          ? applyPlanPatchToMarkdown(existing.markdown, patch)
+          : renderPlan(mergePlan(undefined, patch))
         await writePlanFile(path, markdown)
         await rememberHash(ctx, context.sessionID, markdown)
         const written = parsePlan(markdown)
