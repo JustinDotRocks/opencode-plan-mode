@@ -1,17 +1,21 @@
+import { pathToFileURL } from "node:url"
 import { Plugin } from "@opencode/plugin"
-import { enterPlanMode, exitPlanMode, togglePlanMode } from "./plan-mode.ts"
+import { contentHash, readPlanFile, sourceOfTruthBlock } from "./artifact.ts"
+import { enterPlanMode, exitPlanMode, showPlanArtifact, togglePlanMode } from "./plan-mode.ts"
+import { registerPlanTools } from "./plan-tools.ts"
 import {
   MUTATING_FILE_TOOLS,
   shouldDenyPlanningEdit,
   toolInputPaths,
 } from "./permissions.ts"
-import { isPlanning, loadState } from "./state.ts"
+import { isPlanning, loadState, saveState } from "./state.ts"
 import { researchInstructions } from "./status.ts"
 
 export default Plugin.define({
   id: "plan-mode",
   async setup(ctx) {
     await ctx.storage.set("loaded", true)
+    await registerPlanTools(ctx)
 
     await ctx.command.transform((editor) => {
       editor.add({
@@ -47,6 +51,14 @@ export default Plugin.define({
           await exitPlanMode(ctx, sessionID, prompt.text)
         },
       })
+
+      editor.add({
+        name: "plan-show",
+        description: "Show the current plan artifact (source of truth) and derived checklist",
+        execute: async ({ sessionID }) => {
+          await showPlanArtifact(ctx, sessionID)
+        },
+      })
     })
 
     await ctx.session.hook("context", async (event) => {
@@ -55,6 +67,31 @@ export default Plugin.define({
       event.system.push({
         type: "text",
         text: researchInstructions(state.planPath),
+      })
+      const doc = await readPlanFile(state.planPath)
+      if (!doc) return
+      const hash = contentHash(doc.markdown)
+      if (state.contentHash !== hash) {
+        await saveState(ctx.storage, { ...state, contentHash: hash })
+      }
+      event.system.push({
+        type: "text",
+        text: sourceOfTruthBlock(state.planPath, doc),
+      })
+    })
+
+    await ctx.session.hook("prompt", async (event) => {
+      const state = await loadState(ctx.storage, event.sessionID)
+      if (!isPlanning(state)) return
+      const doc = await readPlanFile(state.planPath)
+      if (!doc) return
+      const uri = pathToFileURL(state.planPath).href
+      event.prompt.files ??= []
+      if (event.prompt.files.some((file) => file.uri === uri)) return
+      event.prompt.files.push({
+        uri,
+        name: "plan.md",
+        description: "Session plan artifact (source of truth). Edit before approve.",
       })
     })
 
@@ -87,3 +124,5 @@ export default Plugin.define({
     })
   },
 })
+
+
