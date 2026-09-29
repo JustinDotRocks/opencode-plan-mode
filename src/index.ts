@@ -24,8 +24,15 @@ export default Plugin.define({
         name: "plan",
         description: "Enter Plan mode (research only; does not implement)",
         execute: async ({ sessionID, prompt, delivery }) => {
-          await enterPlanMode(ctx, sessionID)
           const extra = prompt.text.trim()
+          const existing = await loadState(ctx.storage, sessionID)
+          const { state } = await enterPlanMode(ctx, sessionID, {
+            announce: !(isApproved(existing) && extra.length > 0),
+          })
+          if (isApproved(state) && extra) {
+            await executePlan(ctx, sessionID, extra)
+            return
+          }
           if (!extra) return
           await ctx.session.prompt({
             sessionID,
