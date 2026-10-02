@@ -3,7 +3,7 @@
 | Surface | Role | Loads |
 | --- | --- | --- |
 | OpenCode 2 Desktop/CLI | Interactive plan/build | Repo `AGENTS.md` (short always-on) + docs below; `/plan` on a manual Backlog kick when gated; Ponytail on implement |
-| KanDev → Cursor ACP | Board cards (Backlog plan kick / IP / Review) | Same repo `AGENTS.md` + docs; profile `custom_prompt` restates priorities; Review stays commit-by-Justin |
+| KanDev → Cursor ACP | Board cards (Backlog plan kick / Ready / IP / Review) | Same repo `AGENTS.md` + docs; profile `custom_prompt` restates priorities; IP pulls from Ready only; Review stays commit-by-Justin |
 | KanDev → OpenCode profile | Alternate board agent | Same; prefer server `plugins` / `AGENTS.md`, not `cli.json` |
 | Ponytail | Minimal code bias | After plan approved / during implement only — not a substitute for SECURITY |
 | Scaffold CLI (future) | New repo bootstrap | Copies global pack + empty project overlays |
