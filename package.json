@@ -6,12 +6,29 @@
   "type": "module",
   "license": "MIT",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./tui": "./src/tui.tsx"
   },
   "files": [
     "src"
   ],
   "dependencies": {
     "@opencode/plugin": "2.0.18"
+  },
+  "peerDependencies": {
+    "@opentui/core": ">=0.5.12",
+    "@opentui/solid": ">=0.5.12",
+    "solid-js": ">=1.9.0"
+  },
+  "peerDependenciesMeta": {
+    "@opentui/core": {
+      "optional": true
+    },
+    "@opentui/solid": {
+      "optional": true
+    },
+    "solid-js": {
+      "optional": true
+    }
   }
 }
