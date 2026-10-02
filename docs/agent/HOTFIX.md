@@ -9,7 +9,7 @@ Use only when **all** are true:
 
 If unsure → treat as **gated** (GATED_WORK).
 
-HOTFIX (and other non-gated cards) skip the plan kick. They still need label `clear-for-ip` on Ready; In Progress pulls from Ready only. Do not wait for plan approval in IP.
+HOTFIX (and other non-gated cards) skip the plan kick. They still go through **Ready** (the gate; `clear-for-ip` is not required); In Progress pulls from Ready only. Do not wait for plan approval in IP.
 
 ## Still required
 - SECURITY + SCOPE always apply
