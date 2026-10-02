@@ -13,6 +13,7 @@ Board: **Backlog → Ready → In Progress → Review → Done**.
 ## Hard rules
 - **Backlog and Ready: plan + ticket text only.** No git, no code edits, no remote sync, no branch create/push/reset. **Implement / verify / branch work only in In Progress.** Remediations only in **Review** (Send-to-agent stays on this PR branch).
 - **Backlog titles** start with `T-N` for queue order (e.g. `T-1 — …`, `T-2 — …`). Manual numbering; increment for new cards.
+- **Quiet Backlog cards:** New Task → open chevron beside Start task → **Create without starting agent** (title/description only; no Plan Mode / no agent).
 - Do **not** replace Review / Send-to-agent / draft-PR behavior.
 - Plan kick + Justin approve happen in **Backlog**. Not at start of In Progress. Do not auto-pull from Backlog.
 - **`clear-for-ip`** is required before/when a card moves to Ready. No marker → not clear. Gated cards **cannot enter In Progress** without it.
