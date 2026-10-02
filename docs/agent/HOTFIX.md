@@ -9,6 +9,8 @@ Use only when **all** are true:
 
 If unsure → treat as **gated** (GATED_WORK).
 
+HOTFIX (and other non-gated cards) pull to In Progress with no plan kick. Do not wait for plan approval in IP.
+
 ## Still required
 - SECURITY + SCOPE always apply
 - Fill TASK_TEMPLATE Goal / In scope / Out of scope / Verify

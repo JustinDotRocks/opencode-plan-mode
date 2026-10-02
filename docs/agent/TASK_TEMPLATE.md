@@ -20,9 +20,9 @@ Which module/ADR to follow. No new layer unless justified in one line.
 ## Blast radius
 Max paths/packages that may change. Prefer the smallest set.
 
-## Plan first? (scan GATED_WORK before coding)
-- [ ] No — no triggers / HOTFIX applies (see HOTFIX.md)
-- [ ] Yes — GATED_WORK trigger matched; produce plan only, wait for Justin approve
+## Plan first? (manual Backlog kick — not at IP start)
+- [ ] No — no triggers / HOTFIX applies; pull to IP with no plan kick (see HOTFIX.md)
+- [ ] Yes — GATED_WORK matched. Backlog kick: plan only, await Justin approve, mark **clear for IP**. Cannot enter IP until clear.
 
 ## Verify (Done when)
 Commands/behaviors that must pass before commit/PR, e.g.:
