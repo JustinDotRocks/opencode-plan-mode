@@ -14,4 +14,4 @@ HOTFIX (and other non-gated cards) skip the plan kick. They still need label `cl
 ## Still required
 - SECURITY + SCOPE always apply
 - Fill TASK_TEMPLATE Goal / In scope / Out of scope / Verify
-- Commit + draft PR as usual when on a KanDev card
+- Commit + draft PR (base `dev` only) as usual when on a KanDev card
