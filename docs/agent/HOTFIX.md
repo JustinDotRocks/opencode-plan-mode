@@ -9,9 +9,9 @@ Use only when **all** are true:
 
 If unsure → treat as **gated** (GATED_WORK).
 
-HOTFIX (and other non-gated cards) pull to In Progress with no plan kick. Do not wait for plan approval in IP.
+HOTFIX (and other non-gated cards) skip the plan kick. They still need label `clear-for-ip` on Ready; In Progress pulls from Ready only. Do not wait for plan approval in IP.
 
 ## Still required
 - SECURITY + SCOPE always apply
 - Fill TASK_TEMPLATE Goal / In scope / Out of scope / Verify
-- Commit + draft PR as usual when on a KanDev card
+- Commit + draft PR (base `dev` only) as usual when on a KanDev card
