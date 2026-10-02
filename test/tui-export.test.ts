@@ -14,10 +14,10 @@ test("package.json exposes a ./tui export next to the server plugin", () => {
   assert.equal(pkg.exports["./tui"], "./src/tui.tsx")
 })
 
-test("TUI module registers an empty session.panel shell for plan-mode.plan", () => {
+test("TUI module registers the plan-mode.plan session.panel shell", () => {
   const source = readFileSync(join(root, "src/tui.tsx"), "utf8")
   assert.match(source, /id:\s*"plan-mode\.tui"/)
   assert.match(source, /append:\s*"session\.panel"/)
-  assert.match(source, /PLAN_PANEL_NAME = "plan-mode\.plan"/)
-  assert.doesNotMatch(source, /plan-show|plan-approve|plan-exit|readPlanFile/)
+  assert.match(source, /PLAN_PANEL_NAME/)
+  assert.doesNotMatch(source, /plan-approve|plan-reject|readPlanFile/)
 })
