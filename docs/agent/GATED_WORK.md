@@ -1,5 +1,5 @@
 # GATED_WORK.md
-When any trigger matches, the card is gated. Plan is a **manual Backlog kick** (not auto on every backlog entry, not at IP start): agent plans only → Justin approves → label **`clear-for-ip`** and move to **Ready**. Do not auto-pull from Backlog. A gated card **cannot enter In Progress** without `clear-for-ip`. In Progress auto-pulls from **Ready** only: implement hands-off through commit + draft PR (base `dev` only); no plan-approval wait. Security review of diff vs plan before Done. Non-gated and HOTFIX skip the plan kick; they still need `clear-for-ip` on Ready. Review + Send-to-agent stay in Review on this PR branch.
+When any trigger matches, the card is gated. Plan is a **manual Backlog kick** (not auto on every backlog entry, not at IP start): agent plans only → Justin approves → move to **Ready** (the gate; `clear-for-ip` is not required). Do not auto-pull from Backlog. A gated card **cannot enter In Progress** until Ready. In Progress auto-pulls from **Ready** only: implement hands-off through commit + draft PR (independent → base `dev`); no plan-approval wait. Security review of diff vs plan before Done. Non-gated and HOTFIX skip the plan kick; they still go through Ready. Review + Send-to-agent stay in Review on this PR branch.
 
 Triggers (any one):
 - Auth, sessions, secrets, credentials, encryption
@@ -13,4 +13,4 @@ Triggers (any one):
 
 Non-triggers (unless a trigger also applies): UI copy, styling, tests for existing behavior, docs-only, typos.
 
-HOTFIX: see HOTFIX.md — no plan kick. Still needs `clear-for-ip` on Ready before IP. Still bound by SECURITY/SCOPE; never skip for auth/secrets/schema.
+HOTFIX: see HOTFIX.md — no plan kick. Still go through **Ready** before IP. Still bound by SECURITY/SCOPE; never skip for auth/secrets/schema.
