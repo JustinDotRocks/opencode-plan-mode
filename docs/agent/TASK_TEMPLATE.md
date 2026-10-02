@@ -32,6 +32,6 @@ npm test
 ```
 
 ## Hand-off
-After verify: commit + draft PR, base **`dev`** unless stacking (`Depends on: T-(N-1)` in this card’s **task prompt/body** and the prior PR is still open). Never `main` unless Justin is promoting a major feature. Summary / Business / Technical / Test plan. Stay on this card’s branch. Do not auto-merge. Do not resolve Review findings for Justin. Send-to-agent stays in Review on this PR branch.
+After verify: commit + draft PR. **Draft PRs base = `dev` only.** Never open or merge to `main` unless Justin is promoting a major feature. If stacked, base the prior open PR branch. `main` is release / major-feature promotion only (GitHub default stays `main`). Summary / Business / Technical / Test plan. Stay on this card’s branch. Do not auto-merge. Do not resolve Review findings for Justin. Send-to-agent stays in Review on this PR branch.
 
 **Exception:** KanDev-config / no-PR cards skip commit + draft PR (details on the T-5 settings card).
