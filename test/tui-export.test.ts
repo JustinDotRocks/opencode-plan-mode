@@ -19,5 +19,7 @@ test("TUI module registers the plan-mode.plan session.panel shell", () => {
   assert.match(source, /id:\s*"plan-mode\.tui"/)
   assert.match(source, /append:\s*"session\.panel"/)
   assert.match(source, /PLAN_PANEL_NAME/)
-  assert.doesNotMatch(source, /plan-approve|plan-reject|readPlanFile/)
+  assert.match(source, /PlanPanelFooter/)
+  assert.match(source, /plan-approve|commandForGate/)
+  assert.doesNotMatch(source, /readPlanFile/)
 })

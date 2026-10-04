@@ -53,5 +53,22 @@ test("TUI panel Close calls panel.close and does not run plan-exit", () => {
   assert.match(source, /commandForControl/)
   const closeChunk = source.slice(source.indexOf("Close") - 120, source.indexOf("Close") + 40)
   assert.doesNotMatch(closeChunk, /plan-exit|discard/)
-  assert.doesNotMatch(source, /plan-approve|plan-reject/)
+  assert.match(source, /PlanPanelFooter/)
+})
+
+test("composer chrome does not register approve or reject keymap ids", () => {
+  const source = readFileSync(join(root, "src/tui.tsx"), "utf8")
+  const composer = source.slice(source.indexOf("function PlanComposerChrome"), source.indexOf("function PlanPanelFooter"))
+  assert.doesNotMatch(composer, /plan-approve|plan-reject|commandForGate/)
+})
+
+test("plan panel footer confirms reject, stays inert in-flight, and disables approve on drift", () => {
+  const source = readFileSync(join(root, "src/tui.tsx"), "utf8")
+  const footer = source.slice(source.indexOf("function PlanPanelFooter"))
+  assert.match(footer, /rejectRequiresConfirm/)
+  assert.match(footer, /onCancelReject/)
+  assert.match(footer, /setBusy\(true\)/)
+  assert.match(footer, /approveDrifted/)
+  assert.match(footer, /commandForGate/)
+  assert.doesNotMatch(footer.slice(footer.indexOf("onCancelReject"), footer.indexOf("onCancelReject") + 80), /runGate|commandForGate/)
 })
