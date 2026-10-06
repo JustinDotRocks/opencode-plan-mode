@@ -32,5 +32,5 @@ If a later card depends on an earlier one, put `Depends on: T-(N-1)` in that lat
 - In Progress auto-pulls from **Ready** only. After pull: implement hands-off through commit + draft PR. **Draft PRs base = `dev` only.** Never open or merge to `main` unless Justin is promoting a major feature.
 - Send-to-agent stays in Review on this PR branch. Move to Ready only to fully re-queue another IP run.
 
-## Enforcement (next install step)
-Wire KanDev so auto-pull is from **Ready** only. Docs alone can under-gate.
+## Enforcement
+In Progress auto-pull is from **Ready** only (current). Docs describe the gate; KanDev enforces it.
