@@ -12,6 +12,9 @@
   "files": [
     "src"
   ],
+  "scripts": {
+    "test": "npx tsx --test test/*.test.ts"
+  },
   "dependencies": {
     "@opencode/plugin": "2.0.18"
   },

@@ -250,7 +250,9 @@ API research and the limits table: [`NOTES.md`](./NOTES.md). Manual Grok run (pl
 ## Tests
 
 ```sh
-npx tsx --test test/artifact.test.ts test/gate.test.ts test/execute.test.ts
+npm test
 ```
+
+That runs the Node test runner via `tsx` over every `test/*.test.ts` file (`artifact`, `gate`, `execute`, `permissions`, `plan-mode`, `plan-tools`, and the TUI suites). Equivalent: `npx tsx --test test/*.test.ts`.
 
 License: MIT (`package.json`). No `LICENSE` file is shipped in v0.
