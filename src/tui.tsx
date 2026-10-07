@@ -194,7 +194,7 @@ export default Plugin.define({
         <Show when={panel.name === PLAN_PANEL_NAME}>
           <box>
             <box flexDirection="row" gap={1}>
-              <text>Plan</text>
+              <text fg="#888888">Plan</text>
               <PlanButtons sessionID={panel.sessionID} />
               <text onMouseUp={() => panel.close()}>Close</text>
             </box>
