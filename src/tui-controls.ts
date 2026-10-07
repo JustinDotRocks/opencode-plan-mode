@@ -35,5 +35,5 @@ export function commandForControl(control: PlanChromeControl): { name: string; t
 export function controlLabel(control: PlanChromeControl): string {
   if (control === "enter") return "Enter plan"
   if (control === "discard") return "Discard"
-  return "Exit"
+  return "Exit (keep)"
 }
