@@ -2,7 +2,7 @@
 
 OpenCode 2 plugin that adds a Cursor-like Plan mode: research without editing the project, keep an editable plan file, then approve before the agent implements.
 
-Plugin id: `plan-mode`. Tested on OpenCode **2.0.18**. This v0 package is not published to npm (`"private": true`).
+Plugin ids: `plan-mode` (server) and `plan-mode.tui` (TUI chrome). Tested on OpenCode **2.0.18**. This v0 package is not published to npm (`"private": true`).
 
 ## Requirements
 
@@ -25,14 +25,14 @@ npm install
 
 ### 2. Add a config snippet
 
-OpenCode 2.0.18 loads a **directory**, not a lone `.ts` file. Point `plugins` at this repo’s `src` directory (it holds the default export). Paths are relative to the config file that contains the entry, unless you use an absolute path.
+OpenCode 2.0.18 loads a **directory**, not a lone `.ts` file. Point `plugins` at this **package directory** (the checkout that contains `package.json`, `index.ts`, and `tui.ts`). Paths are relative to the config file that contains the entry, unless you use an absolute path. Do not point at `src` or at `src/index.ts` alone: a `src`-only path loads the server gate and does not resolve the TUI sibling.
 
 **This repository** (already in `opencode.json`):
 
 ```jsonc
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugins": ["./src"]
+  "plugins": ["./"]
 }
 ```
 
@@ -41,11 +41,13 @@ OpenCode 2.0.18 loads a **directory**, not a lone `.ts` file. Point `plugins` at
 ```jsonc
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugins": ["/absolute/path/to/opencode-plan-mode/src"]
+  "plugins": ["/absolute/path/to/opencode-plan-mode"]
 }
 ```
 
-Replace the path with your checkout. Do not put this entry in `~/.config/opencode/cli.json`. CLI-only plugins stay active against a remote server and do **not** run the server tool gate.
+Replace the path with your checkout. Do not put the **server** gate only in `~/.config/opencode/cli.json`. CLI-only plugins stay active against a remote server and do **not** run the server tool gate.
+
+Verified on OpenCode **2.0.18**: package-root `opencode.json` (`"./"` here, or an absolute path to the checkout). Root `index.ts` and `tui.ts` re-export `src/index.ts` and `src/tui.tsx` so the directory loader finds both siblings. No `cli.json` entry and no extra `package.json` `main` / `exports["./server"]` fields were required. `package.json` already has `exports["./tui"]`; local directory load on 2.0.18 still needs those root entry files.
 
 Plugin arrays **merge** from global config, then project `opencode.json(c)`, then `.opencode/opencode.json(c)`. A later file does not replace earlier plugin lists. To turn this plugin off without deleting the entry:
 
@@ -74,7 +76,13 @@ opencode service status
 opencode plugin list
 ```
 
-`plan-mode` should be **active**, sourced from `src/index.ts`. If `plugin list` prints “No plugins found” immediately after restart, wait until the service is healthy and list again.
+`opencode plugin list` should show **`plan-mode`** **active**, sourced from `index.ts` (the server entry; it re-exports `src/index.ts`). On 2.0.18 that CLI table is one row: TUI is a **feature** of the same local plugin (`tui.ts` beside `index.ts`, which re-exports `src/tui.tsx`, id `plan-mode.tui`). Confirm TUI is enabled:
+
+```sh
+opencode api plugin.list
+```
+
+In the `plan-mode` object, `source.path` should end with `index.ts` and `features` should include `"server": true` and `"tui": true`. If `plugin list` prints “No plugins found” immediately after restart, wait until the service is healthy and list again.
 
 Unrelated V1 packages in the same config (for example `@stablekernel/opencode-cursor`) fail to load on V2. Remove them if the log is noisy. They are not required for this plugin.
 
@@ -232,10 +240,10 @@ After approve, the agent has the same tool authority as a normal `build` session
 Recorded against **2.0.18**. Later 2.x docs allow a `.ts` plugin path; that is not what loaded in testing here.
 
 - **V2 plugin shape only.** Default export is `Plugin.define({ id: "plan-mode", setup })`. A V1 function export does not run. The config key is `plugins`, not `plugin`.
-- **No Plan mode type, sidebar, badge, or Approve button.** The closest UI is the built-in `plan` agent, a `[PLAN] ` title, and synthetic status. A `session.panel` would need a separate `@opencode/plugin/tui` plugin.
+- **No first-class Plan mode type, native sidebar, badge, or Approve button in OpenCode itself.** This package’s TUI plugin (`plan-mode.tui`, loaded from `tui.ts` → `src/tui.tsx`) adds composer **Enter plan** / **Exit (keep)** / **Discard** and a `session.panel` Plan chrome. The built-in `plan` agent, `[PLAN] ` title, and synthetic status still apply.
 - **Cannot register an agent.** `AgentEditor` has no `add`. This plugin uses built-in `plan` and `build`.
 - **Cannot hook the agent switcher.** Picking another agent in the TUI or desktop does not run `/plan-exit` or `/plan-approve`.
-- **Directory load on 2.0.18.** Use `"plugins": ["./src"]` (or an absolute path to `src`). Do not point at `src/index.ts` alone.
+- **Directory load on 2.0.18.** Use `"plugins": ["./"]` (or an absolute path to the package directory). That directory must contain `index.ts` and `tui.ts`. Do not point at `src` or at a lone `.ts` file.
 - **Server plugin.** Tool gating must be configured in `opencode.json`, not `cli.json`.
 - **Commands vs `opencode run` text.** Prefer TUI slash commands or `opencode api post /api/session/<id>/command`.
 - **Built-in plan reminder.** OpenCode tells the `plan` agent not to create or update plan files. This plugin’s context overrides that for `~/.opencode/plan/<sessionID>.md` and requires `plan.write`.
