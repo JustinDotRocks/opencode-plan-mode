@@ -23,3 +23,14 @@ test("TUI module registers the plan-mode.plan session.panel shell", () => {
   assert.match(source, /plan-approve|commandForGate/)
   assert.doesNotMatch(source, /readPlanFile/)
 })
+
+test("plugin setup shows Enter plan on the start-screen footer and registers the palette command", () => {
+  const source = readFileSync(join(root, "src/tui.tsx"), "utf8")
+  const setup = source.slice(source.indexOf("setup(context)"))
+  assert.match(setup, /append:\s*"prompt\.footer\.status"/)
+  assert.match(setup, /!input\.sessionID/)
+  assert.match(setup, /append:\s*"app"/)
+  assert.match(setup, /id:\s*"plan-mode\.enter-start"/)
+  assert.match(setup, /enterPlanOnStart/)
+  assert.doesNotMatch(setup, /^    context\.keymap\.layer/m)
+})
