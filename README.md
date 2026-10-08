@@ -109,7 +109,7 @@ or `opencode plugin add opencode-plan-mode`.
 
 ## Usage
 
-OpenCode has no first-class mode type. The toggle is these commands plus the built-in `plan` agent. The TUI also exposes **Enter plan**, **Exit (keep)**, and **Discard** on the session composer and plan panel header; those call the same `/plan` and `/plan-exit` handlers. Closing the plan panel does not exit or discard.
+OpenCode has no first-class mode type. The toggle is these commands plus the built-in `plan` agent. The TUI also exposes **Enter plan**, **Exit (keep)**, and **Discard** on the session composer and plan panel header; those call the same `/plan` and `/plan-exit` handlers. Closing the plan panel does not exit or discard. **Enter plan** also appears under the start-screen input (before a session exists) and starts plan mode without sending a prompt.
 
 | Command | Behavior |
 | --- | --- |
