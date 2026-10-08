@@ -47,17 +47,20 @@ export function expandUserPath(filePath: string): string {
   return filePath
 }
 
+function withTrailingSep(posixPath: string): string {
+  return posixPath.endsWith("/") ? posixPath : `${posixPath}/`
+}
+
 /**
  * True when `filePath` is the plan directory or a file inside it, after
- * resolving `.` / `..` (and `~`). A string prefix check is not enough:
- * `~/.opencode/plan/../../../.ssh/id_rsa` must not count as in-bounds.
+ * resolving `.` / `..` (and `~`). Trailing-separator containment on both
+ * sides: `~/.opencode/plan/x.md` is in-bounds and `~/.opencode/planner/x.md`
+ * is not. `~/.opencode/plan/../../../.ssh/id_rsa` must not count as in-bounds.
  */
 export function isPlanArtifactPath(filePath: string, _sessionID: string): boolean {
-  const normalized = toPosix(resolve(expandUserPath(filePath)))
-  const dir = toPosix(resolve(planDir()))
-  if (normalized === dir) return true
-  if (normalized.startsWith(`${dir}/`)) return true
-  return false
+  const file = withTrailingSep(toPosix(resolve(expandUserPath(filePath))))
+  const dir = withTrailingSep(toPosix(resolve(planDir())))
+  return file.startsWith(dir)
 }
 
 export function toolInputPaths(input: unknown): string[] {

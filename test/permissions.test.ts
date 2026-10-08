@@ -77,6 +77,24 @@ test("toolInputPaths reads path-like fields and files[] entries", () => {
   )
 })
 
+test("edit of the session plan file is allowed", () => {
+  const artifact = planArtifactPath(sessionID)
+  const paths = toolInputPaths({ filePath: artifact })
+  assert.equal(shouldDenyPlanningEdit(paths, sessionID), false)
+})
+
+test("write of the session plan file is allowed", () => {
+  const artifact = planArtifactPath(sessionID)
+  const paths = toolInputPaths({ path: artifact })
+  assert.equal(shouldDenyPlanningEdit(paths, sessionID), false)
+})
+
+test("isPlanArtifactPath rejects a sibling planner prefix", () => {
+  const sibling = join(homedir(), ".opencode", "planner", "ses_test.md")
+  assert.equal(isPlanArtifactPath(sibling, sessionID), false)
+  assert.equal(shouldDenyPlanningEdit(toolInputPaths({ path: sibling }), sessionID), true)
+})
+
 test("researchOnlyRules deny project edits/shell/execute and allow the plan dir", () => {
   const dir = planDirPosix()
   const rules = researchOnlyRules()
