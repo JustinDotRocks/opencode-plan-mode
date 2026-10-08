@@ -33,6 +33,26 @@ export function commandForControl(control: PlanSessionControl): { name: string; 
   return { name: "plan-exit", text: "" }
 }
 
+export type PlanSessionCommandClient = {
+  runCommand: (input: { sessionID: string; name: string; text: string }) => Promise<unknown>
+  openPlanPanel: (name: string) => void | Promise<void>
+}
+
+/** Chrome enter only: wait for command success, then open the registered Plan panel. */
+export async function runPlanSessionControl(
+  control: PlanSessionControl,
+  sessionID: string,
+  client: PlanSessionCommandClient,
+): Promise<void> {
+  const { name, text } = commandForControl(control)
+  if (control !== "enter") {
+    void client.runCommand({ sessionID, name, text })
+    return
+  }
+  await client.runCommand({ sessionID, name, text })
+  await client.openPlanPanel(PLAN_PANEL_NAME)
+}
+
 export function controlLabel(control: PlanChromeControl): string {
   if (control === "enter") return "Enter plan"
   if (control === "open") return "Open plan"

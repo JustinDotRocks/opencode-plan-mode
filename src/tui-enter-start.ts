@@ -1,14 +1,20 @@
-import { commandForControl } from "./tui-controls.ts"
+import { runPlanSessionControl } from "./tui-controls.ts"
 
 export type EnterPlanOnStartDeps = {
   createSession: () => Promise<string>
   runCommand: (input: { sessionID: string; name: string; text: string }) => Promise<unknown>
   navigateToSession: (sessionID: string) => void | Promise<void>
+  openPlanPanel: (name: string) => void | Promise<void>
 }
 
 export async function enterPlanOnStart(deps: EnterPlanOnStartDeps): Promise<string> {
   const sessionID = await deps.createSession()
-  await deps.runCommand({ sessionID, ...commandForControl("enter") })
-  await deps.navigateToSession(sessionID)
+  await runPlanSessionControl("enter", sessionID, {
+    runCommand: deps.runCommand,
+    openPlanPanel: async (name) => {
+      await deps.navigateToSession(sessionID)
+      await deps.openPlanPanel(name)
+    },
+  })
   return sessionID
 }

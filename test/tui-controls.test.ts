@@ -9,7 +9,9 @@ import {
   controlLabel,
   isResearchPlanMode,
   panelCloseExitsPlanMode,
+  PLAN_PANEL_NAME,
   planChromeControls,
+  runPlanSessionControl,
 } from "../src/tui-controls.ts"
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..")
@@ -52,11 +54,75 @@ test("hiding the plan panel is not exit and is not discard", () => {
   assert.equal(panelCloseExitsPlanMode(), false)
 })
 
+test("successful chrome enter opens the Plan panel after command success", async () => {
+  const order: string[] = []
+  const opened: string[] = []
+  await runPlanSessionControl("enter", "ses_1", {
+    runCommand: async (input) => {
+      order.push("command")
+      assert.deepEqual(input, { sessionID: "ses_1", name: "plan", text: "" })
+    },
+    openPlanPanel: (name) => {
+      order.push("open")
+      opened.push(name)
+    },
+  })
+  assert.deepEqual(order, ["command", "open"])
+  assert.deepEqual(opened, [PLAN_PANEL_NAME])
+})
+
+test("failed chrome enter does not open the Plan panel", async () => {
+  const opened: string[] = []
+  await assert.rejects(
+    () =>
+      runPlanSessionControl("enter", "ses_1", {
+        runCommand: async () => {
+          throw new Error("command failed")
+        },
+        openPlanPanel: (name) => {
+          opened.push(name)
+        },
+      }),
+    /command failed/,
+  )
+  assert.deepEqual(opened, [])
+})
+
+test("non-enter chrome controls do not open the Plan panel", async () => {
+  const opened: string[] = []
+  const commanded: string[] = []
+  await runPlanSessionControl("exit", "ses_1", {
+    runCommand: async (input) => {
+      commanded.push(input.name)
+    },
+    openPlanPanel: (name) => {
+      opened.push(name)
+    },
+  })
+  await runPlanSessionControl("discard", "ses_1", {
+    runCommand: async (input) => {
+      commanded.push(`${input.name}:${input.text}`)
+    },
+    openPlanPanel: (name) => {
+      opened.push(name)
+    },
+  })
+  await Promise.resolve()
+  assert.deepEqual(commanded, ["plan-exit", "plan-exit:discard"])
+  assert.deepEqual(opened, [])
+})
+
+test("enter-then-open helper does not encode a typed /plan slash path", () => {
+  const source = readFileSync(join(root, "src/tui-controls.ts"), "utf8")
+  assert.match(source, /runPlanSessionControl/)
+  assert.doesNotMatch(source, /["'`]\/plan["'`]/)
+})
+
 test("TUI panel Close calls panel.close and does not run plan-exit", () => {
   const source = readFileSync(join(root, "src/tui.tsx"), "utf8")
   assert.match(source, /panel\.close\(\)/)
   assert.match(source, /session\.command/)
-  assert.match(source, /commandForControl/)
+  assert.match(source, /runPlanSessionControl/)
   const closeChunk = source.slice(source.indexOf("Close") - 120, source.indexOf("Close") + 40)
   assert.doesNotMatch(closeChunk, /plan-exit|discard/)
   assert.match(source, /PlanPanelFooter/)

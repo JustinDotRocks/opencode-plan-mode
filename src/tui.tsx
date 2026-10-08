@@ -1,12 +1,13 @@
 import { For, Show, createSignal } from "solid-js"
 import { Plugin, usePlugin } from "@opencode/plugin/tui"
 import {
-  commandForControl,
   controlLabel,
   isResearchPlanMode,
   PLAN_PANEL_NAME,
   planChromeControls,
+  runPlanSessionControl,
   type PlanChromeControl,
+  type PlanSessionControl,
 } from "./tui-controls.ts"
 import { enterPlanOnStart } from "./tui-enter-start.ts"
 import {
@@ -42,8 +43,10 @@ function PlanButtons(props: { sessionID: string }) {
       void context.ui.panel.open(PLAN_PANEL_NAME)
       return
     }
-    const { name, text } = commandForControl(control)
-    void context.client.session.command({ sessionID: props.sessionID, name, text })
+    void runPlanSessionControl(control, props.sessionID, {
+      runCommand: (input) => context.client.session.command(input),
+      openPlanPanel: (name) => context.ui.panel.open(name),
+    })
   }
 
   return (
@@ -61,9 +64,11 @@ function PlanComposerChrome(props: { sessionID: string }) {
   const context = usePlugin()
   const inPlanMode = () => isResearchPlanMode(context.data.session.get(props.sessionID))
 
-  const runControl = (control: PlanChromeControl) => {
-    const { name, text } = commandForControl(control)
-    void context.client.session.command({ sessionID: props.sessionID, name, text })
+  const runControl = (control: PlanSessionControl) => {
+    void runPlanSessionControl(control, props.sessionID, {
+      runCommand: (input) => context.client.session.command(input),
+      openPlanPanel: (name) => context.ui.panel.open(name),
+    })
   }
 
   context.keymap.layer(() => ({
@@ -209,6 +214,7 @@ export default Plugin.define({
         navigateToSession: (sessionID) => {
           context.ui.router.navigate({ type: "session", sessionID })
         },
+        openPlanPanel: (name) => context.ui.panel.open(name),
       })
     }
 

@@ -17,9 +17,13 @@ test("enterPlanOnStart creates, runs /plan with empty text, then navigates", asy
       order.push("navigate")
       assert.equal(id, "ses_1")
     },
+    openPlanPanel: (name) => {
+      order.push("open")
+      assert.equal(name, "plan-mode.plan")
+    },
   })
   assert.equal(sessionID, "ses_1")
-  assert.deepEqual(order, ["create", "command", "navigate"])
+  assert.deepEqual(order, ["create", "command", "navigate", "open"])
 })
 
 test("enterPlanOnStart does not command or navigate when create throws", async () => {
@@ -36,6 +40,9 @@ test("enterPlanOnStart does not command or navigate when create throws", async (
         },
         navigateToSession: () => {
           order.push("navigate")
+        },
+        openPlanPanel: () => {
+          order.push("open")
         },
       }),
     /create failed/,
@@ -58,6 +65,9 @@ test("enterPlanOnStart does not navigate when command throws", async () => {
         },
         navigateToSession: () => {
           order.push("navigate")
+        },
+        openPlanPanel: () => {
+          order.push("open")
         },
       }),
     /command failed/,
