@@ -83,6 +83,19 @@ test("edit of the session plan file is allowed", () => {
   assert.equal(shouldDenyPlanningEdit(paths, sessionID), false)
 })
 
+test("edit of a home-relative plan path is allowed (OpenCode 2.0.18 edit input)", () => {
+  const cwd = homedir()
+  const relative = ".opencode/plan/ses_x.md"
+  const paths = toolInputPaths({
+    path: relative,
+    oldString: "Goal",
+    newString: "Updated goal",
+  })
+  assert.deepEqual(paths, [relative])
+  assert.equal(isPlanArtifactPath(relative, sessionID, cwd), true)
+  assert.equal(shouldDenyPlanningEdit(paths, sessionID, cwd), false)
+})
+
 test("write of the session plan file is allowed", () => {
   const artifact = planArtifactPath(sessionID)
   const paths = toolInputPaths({ path: artifact })

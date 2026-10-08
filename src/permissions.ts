@@ -1,3 +1,4 @@
+import { existsSync, realpathSync } from "node:fs"
 import { homedir } from "node:os"
 import { join, resolve } from "node:path"
 
@@ -52,14 +53,30 @@ function withTrailingSep(posixPath: string): string {
 }
 
 /**
+ * Resolve `filePath` against `cwd` (not `process.cwd()`), then `realpath`
+ * when the path exists so the plan dir and the candidate share one base.
+ * OpenCode 2.0.18 `edit` uses `path` and, from a home session, permission
+ * resources like `.opencode/plan/ses_<id>.md`.
+ */
+function resolveAgainstBase(filePath: string, cwd: string = homedir()): string {
+  const absolute = resolve(cwd, expandUserPath(filePath))
+  if (!existsSync(absolute)) return absolute
+  try {
+    return realpathSync(absolute)
+  } catch {
+    return absolute
+  }
+}
+
+/**
  * True when `filePath` is the plan directory or a file inside it, after
  * resolving `.` / `..` (and `~`). Trailing-separator containment on both
  * sides: `~/.opencode/plan/x.md` is in-bounds and `~/.opencode/planner/x.md`
  * is not. `~/.opencode/plan/../../../.ssh/id_rsa` must not count as in-bounds.
  */
-export function isPlanArtifactPath(filePath: string, _sessionID: string): boolean {
-  const file = withTrailingSep(toPosix(resolve(expandUserPath(filePath))))
-  const dir = withTrailingSep(toPosix(resolve(planDir())))
+export function isPlanArtifactPath(filePath: string, _sessionID: string, cwd: string = homedir()): boolean {
+  const file = withTrailingSep(toPosix(resolveAgainstBase(filePath, cwd)))
+  const dir = withTrailingSep(toPosix(resolveAgainstBase(planDir(), cwd)))
   return file.startsWith(dir)
 }
 
@@ -81,7 +98,11 @@ export function toolInputPaths(input: unknown): string[] {
   return paths
 }
 
-export function shouldDenyPlanningEdit(resources: readonly string[], sessionID: string): boolean {
+export function shouldDenyPlanningEdit(
+  resources: readonly string[],
+  sessionID: string,
+  cwd: string = homedir(),
+): boolean {
   if (resources.length === 0) return true
-  return resources.some((resource) => !isPlanArtifactPath(resource, sessionID))
+  return resources.some((resource) => !isPlanArtifactPath(resource, sessionID, cwd))
 }
