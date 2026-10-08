@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url"
 import { parseExitIntent } from "../src/status.ts"
 import {
   commandForControl,
+  controlLabel,
   isResearchPlanMode,
   panelCloseExitsPlanMode,
   planChromeControls,
@@ -30,9 +31,14 @@ test("discard is a separate explicit /plan-exit discard invocation", () => {
   assert.notDeepEqual(invocation, commandForControl("exit"))
 })
 
-test("chrome shows enter off plan mode and exit+discard while planning", () => {
+test("chrome shows enter off plan mode and open+exit+discard while planning", () => {
   assert.deepEqual(planChromeControls(false), ["enter"])
-  assert.deepEqual(planChromeControls(true), ["exit", "discard"])
+  assert.ok(!planChromeControls(false).includes("open"))
+  assert.deepEqual(planChromeControls(true), ["open", "exit", "discard"])
+})
+
+test("open control is labeled Open plan", () => {
+  assert.equal(controlLabel("open"), "Open plan")
 })
 
 test("research plan mode follows the live session agent and [PLAN] title", () => {
@@ -54,6 +60,13 @@ test("TUI panel Close calls panel.close and does not run plan-exit", () => {
   const closeChunk = source.slice(source.indexOf("Close") - 120, source.indexOf("Close") + 40)
   assert.doesNotMatch(closeChunk, /plan-exit|discard/)
   assert.match(source, /PlanPanelFooter/)
+})
+
+test("TUI opens the registered plan panel from chrome and palette", () => {
+  const source = readFileSync(join(root, "src/tui.tsx"), "utf8")
+  assert.match(source, /panel\.open\(/)
+  assert.match(source, /PLAN_PANEL_NAME/)
+  assert.match(source, /plan-mode\.open-panel/)
 })
 
 test("composer chrome does not register approve or reject keymap ids", () => {

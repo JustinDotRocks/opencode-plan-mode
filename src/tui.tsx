@@ -38,6 +38,10 @@ function PlanButtons(props: { sessionID: string }) {
   const controls = () => planChromeControls(inPlanMode())
 
   const runControl = (control: PlanChromeControl) => {
+    if (control === "open") {
+      void context.ui.panel.open(PLAN_PANEL_NAME)
+      return
+    }
     const { name, text } = commandForControl(control)
     void context.client.session.command({ sessionID: props.sessionID, name, text })
   }
@@ -71,6 +75,14 @@ function PlanComposerChrome(props: { sessionID: string }) {
         palette: true,
         enabled: () => !inPlanMode(),
         run: () => runControl("enter"),
+      },
+      {
+        id: "plan-mode.open-panel",
+        title: "Open plan panel",
+        group: "plan-mode",
+        palette: true,
+        enabled: () => inPlanMode(),
+        run: () => context.ui.panel.open(PLAN_PANEL_NAME),
       },
       {
         id: "plan-mode.exit",
