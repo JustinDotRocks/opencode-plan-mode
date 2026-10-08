@@ -8,6 +8,7 @@ import {
   planChromeControls,
   type PlanChromeControl,
 } from "./tui-controls.ts"
+import { enterPlanOnStart } from "./tui-enter-start.ts"
 import {
   approveDrifted,
   approveEnabled,
@@ -23,6 +24,12 @@ import {
 } from "./tui-gate.ts"
 
 export { PLAN_PANEL_NAME }
+
+function sessionIDFromCreate(result: { id?: string; data?: { id?: string } }): string {
+  const id = result.id ?? result.data?.id
+  if (!id) throw new Error("session create returned no id")
+  return id
+}
 
 function PlanButtons(props: { sessionID: string }) {
   const context = usePlugin()
@@ -183,6 +190,38 @@ function PlanPanelFooter(props: { sessionID: string }) {
 export default Plugin.define({
   id: "plan-mode.tui",
   setup(context) {
+    const runEnterOnStart = () => {
+      void enterPlanOnStart({
+        createSession: async () => sessionIDFromCreate(await context.client.session.create()),
+        runCommand: (input) => context.client.session.command(input),
+        navigateToSession: (sessionID) => {
+          context.ui.router.navigate({ type: "session", sessionID })
+        },
+      })
+    }
+
+    const unslotStart = context.ui.slot({
+      append: "prompt.footer.status",
+      render: (input) => (
+        <Show when={!input.sessionID}>
+          <text onMouseUp={() => runEnterOnStart()}>{controlLabel("enter")}</text>
+        </Show>
+      ),
+    })
+
+    context.keymap.layer(() => ({
+      commands: [
+        {
+          id: "plan-mode.enter",
+          title: "Enter plan mode",
+          group: "plan-mode",
+          palette: true,
+          enabled: () => context.ui.router.current().type !== "session",
+          run: () => runEnterOnStart(),
+        },
+      ],
+    }))
+
     const unslotComposer = context.ui.slot({
       append: "session.composer.top",
       render: (input) => <PlanComposerChrome sessionID={input.sessionID} />,
@@ -207,6 +246,7 @@ export default Plugin.define({
     return () => {
       unslotComposer()
       unslotPanel()
+      unslotStart()
     }
   },
 })
