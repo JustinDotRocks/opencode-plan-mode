@@ -227,18 +227,24 @@ export default Plugin.define({
       ),
     })
 
-    context.keymap.layer(() => ({
-      commands: [
-        {
-          id: "plan-mode.enter",
-          title: "Enter plan mode",
-          group: "plan-mode",
-          palette: true,
-          enabled: () => context.ui.router.current().type !== "session",
-          run: () => runEnterOnStart(),
-        },
-      ],
-    }))
+    const unslotStartKeymap = context.ui.slot({
+      append: "app",
+      render: () => {
+        context.keymap.layer(() => ({
+          commands: [
+            {
+              id: "plan-mode.enter-start",
+              title: "Enter plan mode",
+              group: "plan-mode",
+              palette: true,
+              enabled: () => context.ui.router.current().type !== "session",
+              run: () => runEnterOnStart(),
+            },
+          ],
+        }))
+        return null
+      },
+    })
 
     const unslotComposer = context.ui.slot({
       append: "session.composer.top",
@@ -265,6 +271,7 @@ export default Plugin.define({
       unslotComposer()
       unslotPanel()
       unslotStart()
+      unslotStartKeymap()
     }
   },
 })
