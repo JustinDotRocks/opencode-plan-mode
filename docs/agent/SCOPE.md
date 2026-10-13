@@ -1,3 +1,4 @@
+Shared pack: edit in agent-guardrails, not here.
 # SCOPE.md
 Never touch unrelated logic unless required.
 

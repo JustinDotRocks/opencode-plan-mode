@@ -1,3 +1,4 @@
+Shared pack: edit in agent-guardrails, not here.
 # SECURITY.md
 Priority 1. Non-negotiable.
 

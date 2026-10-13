@@ -1,3 +1,4 @@
+Shared pack: edit in agent-guardrails, not here.
 # Task template (KanDev In Progress / OpenCode)
 
 Copy into the card prompt or session. Keep short. Fill every section.
@@ -28,7 +29,7 @@ Max paths/packages that may change. Prefer the smallest set.
 - [ ] Yes — GATED_WORK matched. Backlog kick: plan only, await Justin approve, move to **Ready**. Cannot enter IP until Ready. Do not auto-pull from Backlog.
 
 ## Verify (Done when)
-Commands/behaviors that must pass before commit/PR, e.g.:
+Commands/behaviors that must pass before commit/PR.
 See `docs/project/PROJECT.md`.
 
 ## Hand-off
