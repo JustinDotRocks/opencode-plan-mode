@@ -47,17 +47,30 @@ export function expandUserPath(filePath: string): string {
   return filePath
 }
 
+function withTrailingSep(posixPath: string): string {
+  return posixPath.endsWith("/") ? posixPath : `${posixPath}/`
+}
+
+/**
+ * Lexical resolve against `cwd` (default home, not `process.cwd()`).
+ * Same rule for missing Write targets and existing Edit targets so a
+ * symlink on `~/.opencode` cannot split logical vs physical prefixes.
+ * `path.resolve` already collapses `..`.
+ */
+function resolveAgainstBase(filePath: string, cwd: string = homedir()): string {
+  return resolve(cwd, expandUserPath(filePath))
+}
+
 /**
  * True when `filePath` is the plan directory or a file inside it, after
- * resolving `.` / `..` (and `~`). A string prefix check is not enough:
- * `~/.opencode/plan/../../../.ssh/id_rsa` must not count as in-bounds.
+ * resolving `.` / `..` (and `~`). Trailing-separator containment on both
+ * sides: `~/.opencode/plan/x.md` is in-bounds and `~/.opencode/planner/x.md`
+ * is not. `~/.opencode/plan/../../../.ssh/id_rsa` must not count as in-bounds.
  */
-export function isPlanArtifactPath(filePath: string, _sessionID: string): boolean {
-  const normalized = toPosix(resolve(expandUserPath(filePath)))
-  const dir = toPosix(resolve(planDir()))
-  if (normalized === dir) return true
-  if (normalized.startsWith(`${dir}/`)) return true
-  return false
+export function isPlanArtifactPath(filePath: string, _sessionID: string, cwd: string = homedir()): boolean {
+  const file = withTrailingSep(toPosix(resolveAgainstBase(filePath, cwd)))
+  const dir = withTrailingSep(toPosix(resolveAgainstBase(planDir(), cwd)))
+  return file.startsWith(dir)
 }
 
 export function toolInputPaths(input: unknown): string[] {
@@ -78,7 +91,11 @@ export function toolInputPaths(input: unknown): string[] {
   return paths
 }
 
-export function shouldDenyPlanningEdit(resources: readonly string[], sessionID: string): boolean {
+export function shouldDenyPlanningEdit(
+  resources: readonly string[],
+  sessionID: string,
+  cwd: string = homedir(),
+): boolean {
   if (resources.length === 0) return true
-  return resources.some((resource) => !isPlanArtifactPath(resource, sessionID))
+  return resources.some((resource) => !isPlanArtifactPath(resource, sessionID, cwd))
 }
