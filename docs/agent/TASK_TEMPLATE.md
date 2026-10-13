@@ -5,6 +5,9 @@ Copy into the card prompt or session. Keep short. Fill every section.
 ## Goal
 One sentence: what ships when this is done.
 
+## Depends on
+`Depends on: T-N` (Justin fills in at card creation), or `none`.
+
 ## In scope
 - Concrete outcomes / files / packages allowed to change
 

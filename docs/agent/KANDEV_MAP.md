@@ -13,14 +13,13 @@ Board: **Backlog → Ready → In Progress → Review → Done**.
 ## Staging / branches
 - GitHub **`default_branch` stays `main`**. That is release / major-feature promotion, not the agent PR base. Optional: protect `main` so only Justin can promote.
 - Day-to-day feature work lands on **`dev`** (staging).
-- **Draft PRs base = `dev` only.** Never open or merge to `main` unless Justin is promoting a major feature.
-- If this card depends on a previous task that still has an open PR, base on that previous task branch (stacked). Otherwise base on `dev`.
+- PR base: see **Stacking**.
 
 ## Quiet create
 Agent titles off → chevron → **Create** without starting an agent. CLI fallback: `kd-quiet`.
 
 ## Stacking
-Dependent card **body** (not description): one line `Depends on: T-N`. Plan: `Builds on T-N; assume its changes exist.` Keep chains linear. Parents above children in Ready. IP is WIP 1, top to bottom.
+Justin writes `Depends on: T-N` as its own line in the task prompt he types when creating the card in KanDev (before Backlog). That prompt becomes {{task_prompt}}, which the IP agent reads. Not the description, and not the agent-written plan. Plan: `Builds on T-N; assume its changes exist.` Keep chains linear. Parents above children in Ready. IP is WIP 1, top to bottom.
 
 **PR base:** no `Depends on` → PR to `dev`. Parent merged → merge `origin/dev`, PR to `dev`. Parent open → merge the parent branch (no rebase, no force-push), PR against that branch, PR body starts `Stacked on #N. Merge after it.` Parent has no PR → skip and `step_complete` with BLOCKED. Parent PR closed unmerged, or parent BLOCKED (its card shows BLOCKED) → `step_complete` with BLOCKED and don't code. Before opening the PR, check the parent again. If it merged during the run, merge `origin/dev` and PR to `dev`. Never open or merge to `main` unless Justin is promoting.
 
