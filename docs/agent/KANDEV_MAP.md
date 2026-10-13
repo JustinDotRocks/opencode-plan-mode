@@ -22,7 +22,7 @@ Agent titles off → chevron → **Create** without starting an agent. CLI fallb
 ## Stacking
 Dependent card **body** (not description): one line `Depends on: T-N`. Plan: `Builds on T-N; assume its changes exist.` Keep chains linear. Parents above children in Ready. IP is WIP 1, top to bottom.
 
-**PR base:** no `Depends on` → PR to `dev`. Parent merged → merge `origin/dev`, PR to `dev`. Parent open → merge the parent branch (no rebase, no force-push), PR against that branch, PR body starts `Stacked on #N. Merge after it.` Parent has no PR → skip and `step_complete` with BLOCKED. Before opening the PR, check the parent again. If it merged during the run, merge `origin/dev` and PR to `dev`. If the parent PR is closed unmerged, or the parent is BLOCKED, `step_complete` with BLOCKED and don't code. Never open or merge to `main` unless Justin is promoting.
+**PR base:** no `Depends on` → PR to `dev`. Parent merged → merge `origin/dev`, PR to `dev`. Parent open → merge the parent branch (no rebase, no force-push), PR against that branch, PR body starts `Stacked on #N. Merge after it.` Parent has no PR → skip and `step_complete` with BLOCKED. Parent PR closed unmerged, or parent BLOCKED (its card shows BLOCKED) → `step_complete` with BLOCKED and don't code. Before opening the PR, check the parent again. If it merged during the run, merge `origin/dev` and PR to `dev`. Never open or merge to `main` unless Justin is promoting.
 
 **KanDev built-in Depends on:** do not use for overnight chains (it waits until the parent is Done/merged). Use it only when a card must wait for a merge.
 
