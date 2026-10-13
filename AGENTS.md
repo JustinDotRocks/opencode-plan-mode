@@ -10,4 +10,4 @@
 Stick to the approved plan as written. Do not reinterpret, rewrite, or expand it. If it's unclear or blocked, stop and ask Justin. Surgical diffs only.
 
 ## Load
-Always: this file + SECURITY + SCOPE. When needed: `docs/agent/ARCHITECTURE.md`, `GATED_WORK.md`, `HOTFIX.md`, `KANDEV_MAP.md`, `TASK_TEMPLATE.md`, `AGENT_STACK.md`. Point at ADRs; do not paste them.
+Always: SECURITY, SCOPE, `docs/project/PROJECT.md`. When needed: `docs/project/ARCHITECTURE.md` plus the other `docs/agent` files. Point at ADRs; do not paste them. Project files may add rules but never weaken SECURITY or SCOPE.

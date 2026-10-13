@@ -11,12 +11,12 @@ Board: **Backlog → Ready → In Progress → Review → Done**.
 | Done | Justin merges to `dev` (staging). Promotion `dev` → `main` is Justin-only. | — |
 
 ## Staging / branches
-- GitHub **`default_branch` stays `main`**. That is release / major-feature promotion, not the agent PR base. Optional: protect `main` so only Justin can promote.
-- Day-to-day feature work lands on **`dev`** (staging).
+- See `docs/project/PROJECT.md`.
+- See `docs/project/PROJECT.md`.
 - PR base: see **Stacking**.
 
 ## Quiet create
-Agent titles off → chevron → **Create** without starting an agent. CLI fallback: `kd-quiet`.
+See `docs/project/PROJECT.md`.
 
 ## Stacking
 Justin writes `Depends on: T-N` as its own line in the task prompt he types when creating the card in KanDev (before Backlog). That prompt becomes {{task_prompt}}, which the IP agent reads. Not the description, and not the agent-written plan. No line means no stacking (base on dev). Plan: `Builds on T-N; assume its changes exist.` Keep chains linear. Parents above children in Ready. IP is WIP 1, top to bottom.

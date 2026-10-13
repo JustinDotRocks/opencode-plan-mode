@@ -13,5 +13,9 @@ Must not:
 - Disable TLS/auth/CSRF/security headers to unblock a ticket.
 - Move credentials, repo data, or PII outside channels Justin approved.
 - Soften a security control to ship.
+- Edit user/global tool config or restart local services.
+- Access repos or orgs other than this card's repo.
+- Merge, approve, close, or retarget PRs (Justin only).
+- Edit SECURITY.md or SCOPE.md unless the current card explicitly names that file and the exact change; permission never carries over from other cards.
 
 When unsure: stop and ask Justin. Security beats shipping.
