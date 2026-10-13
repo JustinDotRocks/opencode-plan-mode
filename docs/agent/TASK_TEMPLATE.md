@@ -29,12 +29,9 @@ Max paths/packages that may change. Prefer the smallest set.
 
 ## Verify (Done when)
 Commands/behaviors that must pass before commit/PR, e.g.:
-```sh
-# replace with project commands
-npm test
-```
+See `docs/project/PROJECT.md`.
 
 ## Hand-off
 After verify: commit + draft PR. No `Depends on` → PR to `dev`. Parent merged → merge `origin/dev`, PR to `dev`. Parent open → merge the parent branch (no rebase, no force-push), PR against that branch, PR body starts `Stacked on #N. Merge after it.` Parent has no PR → skip and `step_complete` with BLOCKED. Parent PR closed unmerged, or parent BLOCKED (its card shows BLOCKED) → `step_complete` with BLOCKED and don't code. Before opening the PR, check the parent again. If it merged during the run, merge `origin/dev` and PR to `dev`. Never open or merge to `main` unless Justin is promoting a major feature. `main` is release / major-feature promotion only (GitHub default stays `main`). Summary / Business / Technical / Test plan. Stay on this card’s branch. Do not auto-merge. Do not resolve Review findings for Justin. Send-to-agent stays in Review on this PR branch.
 
-**Exception:** KanDev-config / no-PR cards skip commit + draft PR (details on the T-5 settings card).
+**Exception:** KanDev-config / no-PR cards skip commit + draft PR (see `docs/project/PROJECT.md`).

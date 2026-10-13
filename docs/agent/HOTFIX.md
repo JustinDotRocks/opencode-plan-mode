@@ -14,4 +14,4 @@ HOTFIX (and other non-gated cards) skip the plan kick. They still go through **R
 ## Still required
 - SECURITY + SCOPE always apply
 - Fill TASK_TEMPLATE Goal / In scope / Out of scope / Verify
-- Commit + draft PR. **Draft PRs base = `dev` only.** Never open or merge to `main` unless Justin is promoting a major feature.
+- Commit + draft PR. **PR base: see KANDEV_MAP Stacking.** Never open or merge to `main` unless Justin is promoting a major feature.
