@@ -22,17 +22,19 @@ Agent titles off → chevron → **Create** without starting an agent. CLI fallb
 ## Stacking
 Dependent card **body** (not description): one line `Depends on: T-N`. Plan: `Builds on T-N; assume its changes exist.` Keep chains linear. Parents above children in Ready. IP is WIP 1, top to bottom.
 
-**PR base:** no `Depends on` → PR to `dev`. Parent merged → merge `origin/dev`, PR to `dev`. Parent open → merge the parent branch (no rebase, no force-push), PR against that branch, PR body starts `Stacked on #N. Merge after it.` Parent has no PR → skip and `step_complete` with BLOCKED. Never open or merge to `main` unless Justin is promoting.
+**PR base:** no `Depends on` → PR to `dev`. Parent merged → merge `origin/dev`, PR to `dev`. Parent open → merge the parent branch (no rebase, no force-push), PR against that branch, PR body starts `Stacked on #N. Merge after it.` Parent has no PR → skip and `step_complete` with BLOCKED. Before opening the PR, check the parent again. If it merged during the run, merge `origin/dev` and PR to `dev`. If the parent PR is closed unmerged, or the parent is BLOCKED, `step_complete` with BLOCKED and don't code. Never open or merge to `main` unless Justin is promoting.
 
 **KanDev built-in Depends on:** do not use for overnight chains (it waits until the parent is Done/merged). Use it only when a card must wait for a merge.
 
-**Morning review:** review in chain order. Merge the parent first in the GitHub web UI with **Automatically delete head branches** on so GitHub retargets the child to `dev`. Do not `gh pr merge --delete-branch` on a parent (it closes the child PR).
+**Morning review:** review in chain order. Merge the parent first in the GitHub web UI so GitHub retargets the child to `dev`. Merge stacked parents with a merge commit, not squash. If one was squashed, merge `origin/dev` into the child after GitHub retargets it. Do not `gh pr merge --delete-branch` on a parent (it closes the child PR).
 
-**Parent needs changes:** send the fix to the parent’s agent, then tell the child’s agent `merge origin/<parent branch>, push.`
+**Repo settings (Justin):** GitHub **Automatically delete head branches** on; merge commits allowed; stacked parents merged with **Create a merge commit**.
 
-**Parent dropped:** close it, retarget the child PR to `dev`, move the child back to Backlog to re-plan.
+**Parent needs changes:** Justin sends the fix to the parent in Review. Then each later card in the chain, in order, gets `merge origin/<its parent branch>, push` (T99, then T100).
 
-**Stuck card:** an IP agent that stops without `step_complete` holds the only IP slot and stalls the queue. Restart or move it by hand.
+**Parent dropped (Justin only):** close it, retarget the child PR to `dev`, move the child back to Backlog to re-plan. Agents never close, retarget, approve or merge PRs, and never move cards.
+
+**Stuck card (Justin only):** an IP agent that stops without `step_complete` holds the only IP slot and stalls the queue. Restart or move it by hand. Agents never close, retarget, approve or merge PRs, and never move cards.
 
 ## Hard rules
 - **Backlog and Ready: plan + ticket text only.** No git, no code edits, no remote sync, no branch create/push/reset. **Implement / verify / branch work only in In Progress.** Remediations only in **Review** (Send-to-agent stays on this PR branch).
