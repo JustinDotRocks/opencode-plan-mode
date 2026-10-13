@@ -1,3 +1,4 @@
+Shared pack: edit in agent-guardrails, not here.
 # Hotfix — when to skip the plan gate
 
 Use only when **all** are true:

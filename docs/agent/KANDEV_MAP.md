@@ -1,3 +1,4 @@
+Shared pack: edit in agent-guardrails, not here.
 # KanDev map (B+C hybrid)
 
 Board: **Backlog → Ready → In Progress → Review → Done**.
@@ -11,7 +12,6 @@ Board: **Backlog → Ready → In Progress → Review → Done**.
 | Done | Justin merges to `dev` (staging). Promotion `dev` → `main` is Justin-only. | — |
 
 ## Staging / branches
-- See `docs/project/PROJECT.md`.
 - See `docs/project/PROJECT.md`.
 - PR base: see **Stacking**.
 
