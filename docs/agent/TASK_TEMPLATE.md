@@ -5,6 +5,9 @@ Copy into the card prompt or session. Keep short. Fill every section.
 ## Goal
 One sentence: what ships when this is done.
 
+## Depends on
+`Depends on: T-N` (Justin fills in at card creation only if stacking; leave out otherwise).
+
 ## In scope
 - Concrete outcomes / files / packages allowed to change
 
@@ -32,6 +35,6 @@ npm test
 ```
 
 ## Hand-off
-After verify: commit + draft PR. **Draft PRs base = `dev` only.** Never open or merge to `main` unless Justin is promoting a major feature. If stacked, base the prior open PR branch. `main` is release / major-feature promotion only (GitHub default stays `main`). Summary / Business / Technical / Test plan. Stay on this card’s branch. Do not auto-merge. Do not resolve Review findings for Justin. Send-to-agent stays in Review on this PR branch.
+After verify: commit + draft PR. No `Depends on` → PR to `dev`. Parent merged → merge `origin/dev`, PR to `dev`. Parent open → merge the parent branch (no rebase, no force-push), PR against that branch, PR body starts `Stacked on #N. Merge after it.` Parent has no PR → skip and `step_complete` with BLOCKED. Parent PR closed unmerged, or parent BLOCKED (its card shows BLOCKED) → `step_complete` with BLOCKED and don't code. Before opening the PR, check the parent again. If it merged during the run, merge `origin/dev` and PR to `dev`. Never open or merge to `main` unless Justin is promoting a major feature. `main` is release / major-feature promotion only (GitHub default stays `main`). Summary / Business / Technical / Test plan. Stay on this card’s branch. Do not auto-merge. Do not resolve Review findings for Justin. Send-to-agent stays in Review on this PR branch.
 
 **Exception:** KanDev-config / no-PR cards skip commit + draft PR (details on the T-5 settings card).
