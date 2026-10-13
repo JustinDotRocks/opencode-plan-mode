@@ -1,4 +1,3 @@
-import { existsSync, realpathSync } from "node:fs"
 import { homedir } from "node:os"
 import { join, resolve } from "node:path"
 
@@ -53,19 +52,13 @@ function withTrailingSep(posixPath: string): string {
 }
 
 /**
- * Resolve `filePath` against `cwd` (not `process.cwd()`), then `realpath`
- * when the path exists so the plan dir and the candidate share one base.
- * OpenCode 2.0.18 `edit` uses `path` and, from a home session, permission
- * resources like `.opencode/plan/ses_<id>.md`.
+ * Lexical resolve against `cwd` (default home, not `process.cwd()`).
+ * Same rule for missing Write targets and existing Edit targets so a
+ * symlink on `~/.opencode` cannot split logical vs physical prefixes.
+ * `path.resolve` already collapses `..`.
  */
 function resolveAgainstBase(filePath: string, cwd: string = homedir()): string {
-  const absolute = resolve(cwd, expandUserPath(filePath))
-  if (!existsSync(absolute)) return absolute
-  try {
-    return realpathSync(absolute)
-  } catch {
-    return absolute
-  }
+  return resolve(cwd, expandUserPath(filePath))
 }
 
 /**
