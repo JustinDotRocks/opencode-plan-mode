@@ -1,4 +1,5 @@
 # opencode-plan-mode
+TypeScript · OpenCode plugin · Plan mode
 
 OpenCode 2 plugin that adds a Cursor-like Plan mode: research without editing the project, keep an editable plan file, then approve before the agent implements.
 
