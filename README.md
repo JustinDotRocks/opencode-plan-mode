@@ -9,6 +9,18 @@ Plugin ids: `plan-mode` (server) and `plan-mode.tui` (TUI chrome). Tested on Ope
 - OpenCode **2** (this repo is pinned and tested against **2.0.18**). V1 plugins do not load.
 - Node.js and npm, so the local `@opencode/plugin` dependency can be installed.
 
+## Agent guardrails
+
+`docs/agent` is the shared pack from [JustinDotRocks/agent-guardrails](https://github.com/JustinDotRocks/agent-guardrails) via git subtree. Do not edit it here. Project rules live in `docs/project/` and root `AGENTS.md`.
+
+Justin updates the pack with:
+
+```sh
+git subtree pull --prefix=docs/agent https://github.com/JustinDotRocks/agent-guardrails.git <main tag> --squash
+```
+
+and merges with a merge commit.
+
 ## Install
 
 v0 is a local checkout. You do not need to publish it.
