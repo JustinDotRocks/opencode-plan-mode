@@ -12,6 +12,7 @@ Shared agent-guardrails pack for KanDev/OpenCode-style agents. Edit pack files o
 ## Install
 
 Justin, on a branch, merge via PR:
+Tags are cut from main only (Justin promotes dev to main). Always subtree from a main tag; never from dev.
 
 ```
 git subtree add --prefix=docs/agent https://github.com/JustinDotRocks/agent-guardrails.git <tag> --squash
@@ -22,6 +23,7 @@ Then copy `templates/project/*` to `docs/project/` and fill in. Add a root `AGEN
 ## Update
 
 Justin, on a branch, merge via PR:
+Tags are cut from main only (Justin promotes dev to main). Always subtree from a main tag; never from dev.
 
 ```
 git subtree pull --prefix=docs/agent https://github.com/JustinDotRocks/agent-guardrails.git <tag> --squash
