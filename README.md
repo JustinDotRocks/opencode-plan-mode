@@ -1,6 +1,17 @@
 # opencode-plan-mode
 TypeScript · OpenCode plugin · Plan mode
 
+## Contents
+
+- [Requirements](#requirements)
+- [Agent guardrails](#agent-guardrails)
+- [Install](#install)
+- [Publishing (optional, not part of v0)](#publishing-optional-not-part-of-v0)
+- [Usage](#usage)
+- [Security: tool gating](#security-tool-gating)
+- [OpenCode 2 caveats](#opencode-2-caveats)
+- [Tests](#tests)
+
 OpenCode 2 plugin that adds a Cursor-like Plan mode: research without editing the project, keep an editable plan file, then approve before the agent implements.
 
 Plugin ids: `plan-mode` (server) and `plan-mode.tui` (TUI chrome). Tested on OpenCode **2.0.18**. This v0 package is not published to npm (`"private": true`).
